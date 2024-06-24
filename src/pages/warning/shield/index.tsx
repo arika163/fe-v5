@@ -1,21 +1,40 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useState, useEffect } from 'react';
-import PageLayout from '@/components/pageLayout';
-import { Button, Input, Table, Tooltip, Tag, message, Modal } from 'antd';
-import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '@/store/common';
-import { getShieldList, deleteShields } from '@/services/shield';
-import { CloseCircleOutlined, ExclamationCircleOutlined, SearchOutlined } from '@ant-design/icons';
-import { useHistory } from 'react-router-dom';
-import { CommonStoreState } from '@/store/commonInterface';
-import { shieldItem } from '@/store/warningInterface';
+import { Button, Input, Table, Tooltip, message, Modal, Switch } from 'antd';
 import { ColumnsType } from 'antd/lib/table';
+import { CloseCircleOutlined, ExclamationCircleOutlined, SearchOutlined } from '@ant-design/icons';
+import { useSelector, useDispatch } from 'react-redux';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
+import { useHistory } from 'react-router-dom';
+import PageLayout from '@/components/pageLayout';
+import { RootState } from '@/store/common';
+import { getShieldList, deleteShields, updateShields } from '@/services/shield';
+import { CommonStoreState } from '@/store/commonInterface';
+import { shieldItem, strategyStatus } from '@/store/warningInterface';
 import LeftTree from '@/components/LeftTree';
 import RefreshIcon from '@/components/RefreshIcon';
 import BlankBusinessPlaceholder from '@/components/BlankBusinessPlaceholder';
+import ColumnSelect from '@/components/ColumnSelect';
+import ColorTag from '@/components/ColorTag';
 import { pageSizeOptionsDefault } from '../const';
 import './index.less';
-import { useTranslation } from 'react-i18next';
+
 const { confirm } = Modal;
 
 const Shield: React.FC = () => {
@@ -35,7 +54,33 @@ const Shield: React.FC = () => {
       title: t('集群'),
       dataIndex: 'cluster',
       render: (data) => {
-        return <div>{data}</div>;
+        const array = data.split(' ') || [];
+        return (
+          (array.length &&
+            array.map((tag: string, index: number) => {
+              return <ColorTag text={tag} key={index}></ColorTag>;
+            })) || <div></div>
+        );
+      },
+    },
+    {
+      title: t('规则备注'),
+      dataIndex: 'note',
+      render: (data, record: any) => {
+        return (
+          <div
+            className='table-active-text'
+            onClick={() => {
+              dispatch({
+                type: 'shield/setCurShieldData',
+                data: record,
+              });
+              handleClickEdit(record.id);
+            }}
+          >
+            {data}
+          </div>
+        );
       },
     },
     {
@@ -47,9 +92,7 @@ const Shield: React.FC = () => {
             {text
               ? text.map((tag, index) => {
                   return tag ? (
-                    // <ColorTag text={`${tag.key} ${tag.func} ${tag.func === 'in' ? tag.value.split(' ').join(', ') : tag.value}`} key={index}>
-                    // </ColorTag>
-                    <div key={index}>{`${tag.key} ${tag.func} ${tag.func === 'in' ? tag.value.split(' ').join(', ') : tag.value}`}</div>
+                    <div key={index} style={{ lineHeight: '16px' }}>{`${tag.key} ${tag.func} ${tag.func === 'in' ? tag.value.split(' ').join(', ') : tag.value}`}</div>
                   ) : null;
                 })
               : ''}
@@ -69,6 +112,7 @@ const Shield: React.FC = () => {
                   whiteSpace: 'nowrap',
                   textOverflow: 'ellipsis',
                   overflow: 'hidden',
+                  lineHeight: '16px',
                 }}
               >
                 {text}
@@ -97,11 +141,31 @@ const Shield: React.FC = () => {
         );
       },
     },
-    // {
-    //   title: t('创建人'),
-    //   ellipsis: true,
-    //   dataIndex: 'create_by',
-    // },
+    {
+      title: t('启用'),
+      dataIndex: 'disabled',
+      render: (disabled, record) => (
+        <Switch
+          checked={disabled === strategyStatus.Enable}
+          size='small'
+          onChange={() => {
+            // @ts-ignore
+            const { id, disabled } = record;
+            updateShields(
+              {
+                ids: [id],
+                fields: {
+                  disabled: !disabled ? 1 : 0,
+                },
+              },
+              curBusiItem.id,
+            ).then(() => {
+              refreshList();
+            });
+          }}
+        />
+      ),
+    },
     {
       title: t('操作'),
       width: '98px',
@@ -198,6 +262,10 @@ const Shield: React.FC = () => {
     getList();
   };
 
+  const handleClickEdit = (id, isClone = false) => {
+    curBusiItem?.id && history.push(`/alert-mutes/edit/${id}${isClone ? '?mode=clone' : ''}`);
+  };
+
   const onSearchQuery = (e) => {
     let val = e.target.value;
     setQuery(val);
@@ -212,15 +280,10 @@ const Shield: React.FC = () => {
   };
 
   return (
-    <PageLayout title={t('屏蔽规则')} icon={<CloseCircleOutlined />}>
+    <PageLayout title={t('屏蔽规则')} icon={<CloseCircleOutlined />} hideCluster>
       <div className='shield-content'>
         <LeftTree
-          clusterGroup={{
-            isShow: true,
-            onChange: clusterChange,
-          }}
           busiGroup={{
-            // showNotGroupItem: true,
             onChange: busiChange,
           }}
         ></LeftTree>
@@ -234,12 +297,14 @@ const Shield: React.FC = () => {
                     refreshList();
                   }}
                 />
+                <ColumnSelect onClusterChange={(e) => setClusters(e)} />
                 <Input onPressEnter={onSearchQuery} className={'searchInput'} prefix={<SearchOutlined />} placeholder={t('搜索标签、屏蔽原因')} />
               </div>
               <div className='header-right'>
                 <Button
                   type='primary'
                   className='add'
+                  ghost
                   onClick={() => {
                     history.push('/alert-mutes/add');
                   }}
@@ -250,7 +315,6 @@ const Shield: React.FC = () => {
             </div>
             <Table
               rowKey='id'
-              // sticky
               pagination={{
                 total: currentShieldData.length,
                 showQuickJumper: true,

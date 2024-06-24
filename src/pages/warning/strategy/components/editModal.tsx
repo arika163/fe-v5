@@ -1,18 +1,35 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import moment from 'moment';
-import { Form, Input, InputNumber, Radio, Select, Row, Col, TimePicker, Checkbox, Tag, message, Space, Switch, Tooltip, Modal } from 'antd';
+import { Form, Input, InputNumber, Radio, Select, Row, Col, TimePicker, Checkbox, Tag, message, Space, Switch, Tooltip, Modal, Button } from 'antd';
 const { Option } = Select;
-import { QuestionCircleFilled, MinusCircleOutlined, PlusCircleOutlined } from '@ant-design/icons';
+import { QuestionCircleFilled, MinusCircleOutlined, PlusCircleOutlined, CaretDownOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { RootState } from '@/store/common';
 import { CommonStoreState } from '@/store/commonInterface';
 import { getTeamInfoList, getNotifiesList } from '@/services/manage';
 import { SwitchWithLabel } from './SwitchWithLabel';
-import { debounce } from 'lodash';
+import { debounce, join } from 'lodash';
+import { ClusterAll } from './operateForm';
 const layout = {
   labelCol: {
-    span: 3,
+    span: 2,
   },
   wrapperCol: {
     span: 20,
@@ -53,7 +70,7 @@ const fields = [
   },
   {
     id: 13,
-    field: 'enable_time',
+    field: 'effective_time',
     name: '生效时间',
   },
   {
@@ -90,6 +107,11 @@ const fields = [
     id: 15,
     field: 'recover_duration',
     name: '留观时长',
+  },
+  {
+    id: 16,
+    field: 'notify_max_number',
+    name: '最大发送次数',
   },
   {
     id: 11,
@@ -212,10 +234,22 @@ const editModal: React.FC<Props> = ({ isModalVisible, editModalFinish }) => {
     form.validateFields().then(async (values) => {
       const data = { ...values };
       switch (values.field) {
-        case 'enable_time':
-          data.enable_stime = values.enable_time[0].format('HH:mm');
-          data.enable_etime = values.enable_time[1].format('HH:mm');
-          delete data.enable_time;
+        case 'effective_time':
+          data.enable_days_of_week = '';
+          values.effective_time.map((item, index) => {
+            if (values.effective_time.length === 1) {
+              data.enable_days_of_week += join(item.enable_days_of_week, ' ');
+            } else {
+              if (index === values.effective_time.length - 1) {
+                data.enable_days_of_week += join(item.enable_days_of_week, ' ');
+              } else {
+                data.enable_days_of_week += join(item.enable_days_of_week, ' ') + ';';
+              }
+            }
+          }),
+            (data.enable_stime = values.effective_time.map((item) => item.enable_stime.format('HH:mm'))),
+            (data.enable_etime = values.effective_time.map((item) => item.enable_etime.format('HH:mm'))),
+            delete data.effective_time;
           break;
         case 'disabled':
           data.disabled = !values.enable_status ? 1 : 0;
@@ -225,7 +259,15 @@ const editModal: React.FC<Props> = ({ isModalVisible, editModalFinish }) => {
           data.enable_in_bg = values.enable_in_bg ? 1 : 0;
           break;
         case 'callbacks':
-          data.callbacks = values.callbacks.map((item) => item.url);
+          if (data.action === 'cover') {
+            delete data.action;
+            data.callbacks = values.callbacks.map((item) => item.url);
+          } else {
+            data.callbacks = values.callbacks;
+          }
+          break;
+        case 'cluster':
+          data.cluster = values.cluster.join(' ');
           break;
         case 'notify_recovered':
           data.notify_recovered = values.notify_recovered ? 1 : 0;
@@ -247,6 +289,12 @@ const editModal: React.FC<Props> = ({ isModalVisible, editModalFinish }) => {
     });
   };
 
+  const handleClusterChange = (v: string[]) => {
+    if (v.includes(ClusterAll)) {
+      form.setFieldsValue({ cluster: [ClusterAll] });
+    }
+  };
+
   const editModalClose = () => {
     editModalFinish(false);
   };
@@ -261,6 +309,7 @@ const editModal: React.FC<Props> = ({ isModalVisible, editModalFinish }) => {
         title={t('批量更新')}
         visible={isModalVisible}
         onOk={modelOk}
+        width={860}
         onCancel={() => {
           editModalClose();
         }}
@@ -275,9 +324,14 @@ const editModal: React.FC<Props> = ({ isModalVisible, editModalFinish }) => {
             disabled: 0, // 0:立即启用 1:禁用
             enable_status: true, // true:立即启用 false:禁用
             notify_recovered: 1, // 1:启用
-            enable_time: [moment('00:00', 'HH:mm'), moment('23:59', 'HH:mm')],
-            cluster: clusterList[0] || 'Default', // 生效集群
-            enable_days_of_week: ['1', '2', '3', '4', '5', '6', '0'],
+            effective_time: [
+              {
+                enable_stime: moment('00:00', 'HH:mm'),
+                enable_etime: moment('23:59', 'HH:mm'),
+                enable_days_of_week: ['1', '2', '3', '4', '5', '6', '0'],
+              },
+            ],
+            cluster: clusterList || ['Default'], // 生效集群
             field: 'cluster',
           }}
         >
@@ -290,7 +344,7 @@ const editModal: React.FC<Props> = ({ isModalVisible, editModalFinish }) => {
               },
             ]}
           >
-            <Select style={{ width: '100%' }} onChange={fieldChange}>
+            <Select suffixIcon={<CaretDownOutlined />} style={{ width: '100%' }} onChange={fieldChange}>
               {fields.map((item) => (
                 <Option key={item.id} value={item.field}>
                   {item.name}
@@ -338,7 +392,10 @@ const editModal: React.FC<Props> = ({ isModalVisible, editModalFinish }) => {
                         },
                       ]}
                     >
-                      <Select>
+                      <Select suffixIcon={<CaretDownOutlined />} mode='multiple' onChange={handleClusterChange}>
+                        <Option value={ClusterAll} key={ClusterAll}>
+                          {ClusterAll}
+                        </Option>
                         {clusterList?.map((item) => (
                           <Option value={item} key={item}>
                             {item}
@@ -543,30 +600,99 @@ const editModal: React.FC<Props> = ({ isModalVisible, editModalFinish }) => {
                     </Form.Item>
                   </>
                 );
-              case 'callbacks':
+              case 'notify_max_number':
                 return (
                   <>
                     <Form.Item label={t('改为：')}>
-                      <Form.List name='callbacks' initialValue={[{}]}>
-                        {(fields, { add, remove }, { errors }) => (
-                          <>
-                            {fields.map((field, index) => (
-                              <Row gutter={[10, 0]} key={field.key}>
-                                <Col span={22}>
-                                  <Form.Item name={[field.name, 'url']}>
-                                    <Input />
-                                  </Form.Item>
-                                </Col>
+                      <Space>
+                        <Form.Item
+                          style={{ marginBottom: 0 }}
+                          name='notify_max_number'
+                          initialValue={0}
+                          wrapperCol={{ span: 10 }}
+                          rules={[
+                            {
+                              required: true,
+                              message: t('最大发送次数不能为空'),
+                            },
+                          ]}
+                        >
+                          <InputNumber min={0} precision={0} />
+                        </Form.Item>
+                        <Tooltip title={t(`如果值为0，则不做最大发送次数的限制`)}>
+                          <QuestionCircleFilled />
+                        </Tooltip>
+                      </Space>
+                    </Form.Item>
+                  </>
+                );
+              case 'callbacks':
+                return (
+                  <>
+                    <Form.Item name='action' label={t('模式：')} initialValue='cover'>
+                      <Radio.Group
+                        buttonStyle='solid'
+                        onChange={(e) => {
+                          if (e.target.value === 'cover') {
+                            form.setFieldsValue({
+                              callbacks: [
+                                {
+                                  url: '',
+                                },
+                              ],
+                            });
+                          } else {
+                            form.setFieldsValue({ callbacks: '' });
+                          }
+                        }}
+                      >
+                        <Radio.Button value='cover'>覆盖</Radio.Button>
+                        <Radio.Button value='callback_add'>新增</Radio.Button>
+                        <Radio.Button value='callback_del'>删除</Radio.Button>
+                      </Radio.Group>
+                    </Form.Item>
+                    <Form.Item shouldUpdate noStyle>
+                      {({ getFieldValue }) => {
+                        const action = getFieldValue('action');
+                        if (action === 'cover') {
+                          return (
+                            <Form.Item label={t('改为：')}>
+                              <Form.List name='callbacks' initialValue={[{}]}>
+                                {(fields, { add, remove }, { errors }) => (
+                                  <>
+                                    {fields.map((field, index) => (
+                                      <Row gutter={[10, 0]} key={field.key}>
+                                        <Col span={22}>
+                                          <Form.Item name={[field.name, 'url']}>
+                                            <Input />
+                                          </Form.Item>
+                                        </Col>
 
-                                <Col span={1}>
-                                  <MinusCircleOutlined className='control-icon-normal' onClick={() => remove(field.name)} />
-                                </Col>
-                              </Row>
-                            ))}
-                            <PlusCircleOutlined className='control-icon-normal' onClick={() => add()} />
-                          </>
-                        )}
-                      </Form.List>
+                                        <Col span={1}>
+                                          <MinusCircleOutlined className='control-icon-normal' onClick={() => remove(field.name)} />
+                                        </Col>
+                                      </Row>
+                                    ))}
+                                    <PlusCircleOutlined className='control-icon-normal' onClick={() => add()} />
+                                  </>
+                                )}
+                              </Form.List>
+                            </Form.Item>
+                          );
+                        } else if (action === 'callback_add') {
+                          return (
+                            <Form.Item name='callbacks' label={t('新增：')}>
+                              <Input />
+                            </Form.Item>
+                          );
+                        } else if (action === 'callback_del') {
+                          return (
+                            <Form.Item name='callbacks' label={t('删除：')}>
+                              <Input />
+                            </Form.Item>
+                          );
+                        }
+                      }}
                     </Form.Item>
                   </>
                 );
@@ -578,40 +704,83 @@ const editModal: React.FC<Props> = ({ isModalVisible, editModalFinish }) => {
                     </Form.Item>
                   </>
                 );
-              case 'enable_time':
+              case 'effective_time':
                 return (
                   <>
                     <Form.Item
                       label={t('改为：')}
-                      name='enable_days_of_week'
+                      name='effective_time'
                       rules={[
                         {
-                          required: false,
+                          required: true,
                           message: t('生效时间不能为空'),
                         },
                       ]}
                     >
-                      <Select mode='tags'>{enableDaysOfWeekOptions}</Select>
-                    </Form.Item>
-                    <Form.Item
-                      name='enable_time'
-                      {...tailLayout}
-                      rules={[
-                        {
-                          required: false,
-                          message: t('生效时间不能为空'),
-                        },
-                      ]}
-                    >
-                      <TimePicker.RangePicker
-                        format='HH:mm'
-                        onChange={(val, val2) => {
-                          form.setFieldsValue({
-                            enable_stime: val2[0],
-                            enable_etime: val2[1],
-                          });
-                        }}
-                      />
+                      <Form.List name='effective_time'>
+                        {(fields, { add, remove }) => (
+                          <>
+                            {fields.map(({ key, name, ...restField }) => (
+                              <Space
+                                key={key}
+                                style={{
+                                  display: 'flex',
+                                  marginBottom: 8,
+                                }}
+                                align='baseline'
+                              >
+                                <Form.Item
+                                  {...restField}
+                                  name={[name, 'enable_days_of_week']}
+                                  style={{
+                                    width: 450,
+                                  }}
+                                  rules={[
+                                    {
+                                      required: true,
+                                      message: t('请选择生效周期'),
+                                    },
+                                  ]}
+                                >
+                                  <Select mode='multiple' placeholder='生效周期'>
+                                    {enableDaysOfWeekOptions}
+                                  </Select>
+                                </Form.Item>
+                                <Form.Item
+                                  {...restField}
+                                  name={[name, 'enable_stime']}
+                                  rules={[
+                                    {
+                                      required: true,
+                                      message: t('开始时间不能为空'),
+                                    },
+                                  ]}
+                                >
+                                  <TimePicker format='HH:mm' placeholder='开始时间' />
+                                </Form.Item>
+                                <Form.Item
+                                  {...restField}
+                                  name={[name, 'enable_etime']}
+                                  rules={[
+                                    {
+                                      required: true,
+                                      message: t('结束时间不能为空'),
+                                    },
+                                  ]}
+                                >
+                                  <TimePicker format='HH:mm' placeholder='结束时间' />
+                                </Form.Item>
+                                <MinusCircleOutlined onClick={() => remove(name)} />
+                              </Space>
+                            ))}
+                            <Form.Item>
+                              <Button type='dashed' onClick={() => add()} block icon={<PlusOutlined />}>
+                                添加生效时间
+                              </Button>
+                            </Form.Item>
+                          </>
+                        )}
+                      </Form.List>
                     </Form.Item>
                   </>
                 );

@@ -1,6 +1,22 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Form, Input, Card, Select, Col, Button, Row, message, Checkbox, Tooltip, Radio, Modal } from 'antd';
-import { QuestionCircleFilled, PlusCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { QuestionCircleFilled, PlusCircleOutlined, EditOutlined, DeleteOutlined, CaretDownOutlined } from '@ant-design/icons';
 import RuleModal from './ruleModal';
 import TagItem from './tagItem';
 import { addSubscribe, editSubscribe, deleteSubscribes } from '@/services/subscribe';
@@ -13,7 +29,7 @@ import { CommonStoreState } from '@/store/commonInterface';
 import '../index.less';
 import { useTranslation } from 'react-i18next';
 import _ from 'lodash';
-
+import { ClusterAll } from '../../strategy/components/operateForm';
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -100,6 +116,7 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type }) => {
       rule_id: ruleCur.id,
       user_group_ids: values.user_group_ids ? values.user_group_ids.join(' ') : '',
       new_channels: values.new_channels ? values.new_channels.join(' ') : '',
+      cluster: values.cluster.join(' '),
     };
     if (type === 1) {
       editSubscribe([{ ...params, id: detail.id }], curBusiItem.id)
@@ -138,6 +155,12 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type }) => {
     });
   };
 
+  const handleClusterChange = (v: string[]) => {
+    if (v.includes(ClusterAll)) {
+      form.setFieldsValue({ cluster: [ClusterAll] });
+    }
+  };
+
   return (
     <>
       <div className='operate-form-index' id={littleAffect ? 'littleAffect' : ''}>
@@ -150,7 +173,7 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type }) => {
           onFinishFailed={onFinishFailed}
           initialValues={{
             ...detail,
-            cluster: clusterList[0] || 'Default',
+            cluster: detail.cluster ? detail.cluster.split(' ') : clusterList || ['Default'], // 生效集群
             redefine_severity: detail?.redefine_severity ? true : false,
             redefine_channels: detail?.redefine_channels ? true : false,
             user_group_ids: detail?.user_group_ids ? detail?.user_group_ids?.split(' ') : [],
@@ -168,7 +191,10 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type }) => {
                 },
               ]}
             >
-              <Select>
+              <Select suffixIcon={<CaretDownOutlined />} mode='multiple' onChange={handleClusterChange}>
+                <Option value={ClusterAll} key={ClusterAll}>
+                  {ClusterAll}
+                </Option>
                 {clusterList?.map((item, index) => (
                   <Option value={item} key={index}>
                     {item}

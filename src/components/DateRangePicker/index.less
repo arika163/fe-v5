@@ -25,11 +25,11 @@
         width: 100%;
         text-align: left;
         &:hover {
-          color: #1473ff;
+          color: @primary-color;
           background: rgba(20, 115, 255, 0.06);
         }
         &.active {
-          color: #1473ff;
+          color: @primary-color;
         }
       }
     }
@@ -49,6 +49,20 @@
           margin-left: 10px;
         }
       }
+    }
+  }
+}
+
+.time-range-picker-target-nullable {
+  .anticon-close-circle {
+    display: none;
+  }
+  &:hover {
+    .anticon-caret-down {
+      display: none;
+    }
+    .anticon-close-circle {
+      display: inline-block;
     }
   }
 }

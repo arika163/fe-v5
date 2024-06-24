@@ -1,5 +1,22 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useEffect, useState, useRef } from 'react';
 import { useSelector } from 'react-redux';
+import moment from 'moment';
 import { useParams } from 'react-router-dom';
 import PageLayout from '@/components/pageLayout';
 import { Button, Table, Input, Switch, message, List, Row, Col, Pagination, Modal } from 'antd';
@@ -62,6 +79,14 @@ const Resource: React.FC = () => {
       title: t('角色'),
       dataIndex: 'roles',
       render: (text: [], record) => text.join(', '),
+    },
+    {
+      title: t('创建时间'),
+      dataIndex: 'create_at',
+      render: (text) => {
+        return moment.unix(text).format('YYYY-MM-DD HH:mm:ss');
+      },
+      sorter: (a, b) => a.create_at - b.create_at,
     },
     {
       title: t('操作'),
@@ -151,7 +176,7 @@ const Resource: React.FC = () => {
             <div className='event-table-search-right'>
               {activeKey === UserType.User && profile.roles.includes('Admin') && (
                 <div className='user-manage-operate'>
-                  <Button type='primary' onClick={() => handleClick(activeKey === UserType.User ? ActionType.CreateUser : t('创建团队'))}>
+                  <Button type='primary' onClick={() => handleClick(activeKey === UserType.User ? ActionType.CreateUser : t('创建团队'))} ghost>
                     {t('创建用户')}
                   </Button>
                 </div>
@@ -167,6 +192,7 @@ const Resource: React.FC = () => {
             fetchParams={{
               query,
             }}
+            tableLayout='auto'
           ></BaseTable>
         </div>
 

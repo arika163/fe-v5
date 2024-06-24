@@ -1,7 +1,22 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { Component, ReactNode } from 'react';
 import { Button, Checkbox, Dropdown, Menu, Popover, Select, Spin } from 'antd';
 import { DownOutlined, SyncOutlined, SettingOutlined, ShareAltOutlined } from '@ant-design/icons';
-import moment from 'moment';
 import _ from 'lodash';
 import '@d3-charts/ts-graph/dist/index.css';
 import * as config from '../config';
@@ -13,7 +28,6 @@ import GraphChart from './Graph';
 import { Range, formatPickerDate } from '@/components/DateRangePicker';
 import { SetTmpChartData } from '@/services/metric';
 import { ChartType } from '@/components/D3Charts/src/interface';
-import { QueryStats } from '@/pages/metric/explorer/QueryStatsView';
 
 export interface GraphDataProps {
   step: number | null;
@@ -56,7 +70,7 @@ interface GraphProps {
   defaultOffsets?: string[];
   highLevelConfig?: Partial<HighLevelConfigType>;
   onErrorOccured?: (errorArr: ErrorInfoType[]) => void;
-  onRequestCompleted?: (requestInfo: QueryStats) => void;
+  onRequestCompleted?: (requestInfo: any) => void;
 }
 
 interface GraphState {
@@ -77,7 +91,7 @@ interface GraphState {
     formatUnit: 1024 | 1000 | 'humantime';
   };
   onErrorOccured?: (errorArr: ErrorInfoType[]) => void;
-  onRequestCompleted?: (requestInfo: QueryStats) => void;
+  onRequestCompleted?: (requestInfo: any) => void;
 }
 
 const formatUnitInfoMap = {
@@ -209,7 +223,7 @@ export default class Graph extends Component<GraphProps, GraphState> {
   }
 
   generateQuery(obj) {
-    const { offset, curAggrFunc, curAggrGroup, calcFunc } = obj;
+    const { offset, curAggrFunc, curAggrGroup, calcFunc = '' } = obj;
     const [calcMethod, calcPeriod] = calcFunc.split('_');
     const { metric, selectedHosts } = this.props.data;
     if (metric && selectedHosts) {
@@ -227,8 +241,8 @@ export default class Graph extends Component<GraphProps, GraphState> {
     this.setState({ spinning: true });
     try {
       return api.fetchHistory({
-        start,
-        end,
+        start: start - (start % step),
+        end: end - (end % step),
         step,
         query,
       });
@@ -324,7 +338,7 @@ export default class Graph extends Component<GraphProps, GraphState> {
     let { promqls, range, step } = this.props.data;
     const { start, end } = formatPickerDate(range);
     // 如果没有 step(resolution)，计算一个默认的 step 值
-    if (!step) step = Math.max(Math.floor((end - start) / 250), 1);
+    if (!step) step = Math.max(Math.floor((end - start) / 240), 1);
 
     let obj: { curAggrFunc?: string; curAggrGroup?: string[]; offset?: string[]; calcFunc: string } = { calcFunc };
     if (aggrFunc) obj.curAggrFunc = aggrFunc;

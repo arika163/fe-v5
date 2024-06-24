@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import { IStore } from '@/store/common';
 import { IshieldState } from '@/store/warningInterface/shield';
 
@@ -6,7 +22,7 @@ import { IshieldState } from '@/store/warningInterface/shield';
 // }
 
 const initData: any = {
-  curShieldData: {}
+  curShieldData: {},
 };
 
 const ShieldStore: IStore<IshieldState> = {
@@ -20,21 +36,21 @@ const ShieldStore: IStore<IshieldState> = {
   effects: {
     *setCurShieldData({ data }, { put }) {
       // const { dat: data } = yield getCommonClusters();
-      const tags = data.tags.map(item => {
+      const tags = data.tags.map((item) => {
         return {
           ...item,
-          value: item.func === 'in' ? item.value.split(' ') : item.value
-        }
-      })
+          value: item.func === 'in' ? item.value.split(' ') : item.value,
+        };
+      });
       yield put({
         type: 'saveData',
         prop: 'curShieldData',
         data: {
           ...data,
-          tags
+          tags,
         },
       });
-    }
+    },
   },
 };
 

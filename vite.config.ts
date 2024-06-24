@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import { defineConfig } from 'vite';
 import { dependencies } from './package.json';
 import reactRefresh from '@vitejs/plugin-react-refresh';
@@ -43,18 +59,6 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@/store/eventWallInterface',
-        replacement: '/src/Packages/EventWall/interface',
-      },
-      {
-        find: '@/services/outfire',
-        replacement: '/src/Packages/Outfire/services/outfire',
-      },
-      {
-        find: '@/pages/outfire',
-        replacement: '/src/Packages/Outfire/pages',
-      },
-      {
         find: '@',
         replacement: '/src',
       },
@@ -63,53 +67,29 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // 字符串简写写法
-      // '/foo': 'http://localhost:4567/foo',
-      // 选项写法
-      // '/api': {
-      //   target: 'http://10.86.76.13:8085',
-      //   changeOrigin: true,
-      // },
+      '/api/n9e-plus': {
+        target: 'http://10.206.0.7:29001/',
+        changeOrigin: true,
+      },
       '/api/n9e': {
-        target: 'http://116.85.46.86:18000',
+        target: 'http://10.206.0.11:9000/',
         changeOrigin: true,
       },
-      '/filters': {
-        target: 'http://10.85.128.137',
+      '/api/v1/': {
+        target: 'http://10.206.0.11:9000/',
         changeOrigin: true,
       },
-      '/integrations': {
-        target: 'http://10.85.128.137',
+      '/api/fc-brain': {
+        target: 'http://10.206.0.11:9000/',
         changeOrigin: true,
       },
-      '/alerts': {
-        target: 'http://10.85.128.137',
-        changeOrigin: true,
-      },
-      '/changes': {
-        target: 'http://10.85.128.137',
-        changeOrigin: true,
-      },
-      '/dimension/api/v1': {
-        target: 'http://10.166.53.215:8089',
-        changeOrigin: true,
-      },
-      '/v1/api/fireplate': {
-        target: 'http://172.20.70.60:8010',
-        changeOrigin: true,
-      },
-      // 正则表达式写法
-      // '^/fallback/.*': {
-      //   target: 'http://jsonplaceholder.typicode.com',
-      //   changeOrigin: true,
-      //   rewrite: (path) => path.replace(/^\/fallback/, '')
-      // }
     },
   },
   build: {
     target: 'chrome58',
     outDir: 'pub',
     chunkSizeWarningLimit: 650,
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -127,13 +107,48 @@ export default defineConfig({
         additionalData: `@import "/src/global.variable.less";`,
         javascriptEnabled: true,
         modifyVars: {
+          // modify-start
+          // 'primary-color': '#1890ff',
+          // 'font-size-base': '12px',
+          // 'color-base': '#333',
+          // 'form-item-margin-bottom': '18px',
+          // 'font-family': 'verdana, Microsoft YaHei, Consolas, Deja Vu Sans Mono, Bitstream Vera Sans Mono',
+          // 'text-color': '#333',
+          // 'menu-dark-bg': '#2C3D5E',
+          // 'menu-dark-inline-submenu-bg': '#2C3D5E',
+          // modify-end
+
+          // 下面是云眼的全局样式
+          'primary-color': '#6C53B1',
+          'primary-background': '#F0ECF9',
+          'disabled-color': 'rgba(0, 0, 0, 0.5)',
+          'tabs-ink-bar-color': 'linear-gradient(to right, #9F4CFC, #0019F4 )',
           'font-size-base': '12px',
-          'color-base': '#333',
+          'menu-item-font-size': '14px',
+          'radio-button-checked-bg': '#EAE6F3',
           'form-item-margin-bottom': '18px',
-          'font-family': 'verdana, Microsoft YaHei, Consolas, Deja Vu Sans Mono, Bitstream Vera Sans Mono',
-          'text-color': '#333',
-          'menu-dark-bg': '#2C3D5E',
-          'menu-dark-inline-submenu-bg': '#2C3D5E',
+          'font-family': 'Monda-Regular,PingFangSC-Regular,microsoft yahei ui,microsoft yahei,simsun,"sans-serif"',
+          'text-color': '#262626',
+          // 'component-background': '#f0f0f0',
+          // 'modal-header-bg': '#fff',
+          // 'modal-content-bg': '#fff',
+          // 'modal-footer-bg': '#fff',
+          // 'select-background': '#fff',
+          'table-row-hover-bg': '#EAE8F2',
+          'table-header-bg': '#f0f0f0',
+          // 'collapse-content-bg': '#fff',
+          'select-selection-item-bg': '#EAE6F3',
+          'select-selection-item-border-color': '#6C53B1',
+          'menu-item-color': '#8C8C8C',
+          'menu-inline-submenu-bg': '#f0f0f0',
+          'menu-bg': '#f0f0f0',
+          'checkbox-check-bg': '#fff',
+          'checkbox-check-color': '#6C53B1',
+          'checkbox-color': 'fade(@checkbox-check-color, 10)',
+          // 'input-bg': '#fff',
+          'btn-padding-horizontal-base': '12px',
+          // 'menu-inline-toplevel-item-height': '48px',
+          // 'item-hover-bg': 'fade(@checkbox-check-color, 10)',
         },
       },
     },

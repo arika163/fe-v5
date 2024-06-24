@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useState, useEffect } from 'react';
 import PageLayout from '@/components/pageLayout';
 import { Button, Input, Table, message, Modal } from 'antd';
@@ -17,7 +33,7 @@ import { pageSizeOptionsDefault } from '../const';
 import './index.less';
 import { useTranslation } from 'react-i18next';
 const { confirm } = Modal;
-
+import ColumnSelect from '@/components/ColumnSelect';
 const Shield: React.FC = () => {
   const { t } = useTranslation();
   const history = useHistory();
@@ -34,7 +50,13 @@ const Shield: React.FC = () => {
       title: t('集群'),
       dataIndex: 'cluster',
       render: (data) => {
-        return <div>{data}</div>;
+        const array = data.split(' ') || [];
+        return (
+          (array.length &&
+            array.map((tag: string, index: number) => {
+              return <ColorTag text={tag} key={index}></ColorTag>;
+            })) || <div></div>
+        );
       },
     },
     {
@@ -199,13 +221,9 @@ const Shield: React.FC = () => {
   };
 
   return (
-    <PageLayout title={t('订阅规则')} icon={<CopyOutlined />}>
+    <PageLayout title={t('订阅规则')} icon={<CopyOutlined />} hideCluster>
       <div className='shield-content'>
         <LeftTree
-          clusterGroup={{
-            isShow: true,
-            onChange: clusterChange,
-          }}
           busiGroup={{
             // showNotGroupItem: true,
             onChange: busiChange,
@@ -221,12 +239,14 @@ const Shield: React.FC = () => {
                     refreshList();
                   }}
                 />
+                <ColumnSelect onClusterChange={(e) => setClusters(e)} />
                 <Input onPressEnter={onSearchQuery} className={'searchInput'} prefix={<SearchOutlined />} placeholder={t('搜索规则、标签、接收组')} />
               </div>
               <div className='header-right'>
                 <Button
                   type='primary'
                   className='add'
+                  ghost
                   onClick={() => {
                     history.push('/alert-subscribes/add');
                   }}

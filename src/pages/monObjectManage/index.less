@@ -3,10 +3,10 @@
   padding: @basePadding;
   overflow-x: auto;
   box-sizing: border-box;
-  width: 100%;
   .table-area {
-    width: calc(100% - 210px);
+    // width: calc(100% - 210px);
     padding: 16px;
+    flex: 1;
     .table-operate-box {
       width: 100%;
       display: flex;
@@ -18,7 +18,22 @@
     .ant-tag {
       cursor: pointer;
     }
+    .table-td-fullBG {
+      height: 100%;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    th,td {
+      text-align: center;
+    }
+    td {
+      padding: 1px !important;
+      line-height: unset !important;
+    }
   }
+  
 }
 
 .mon-manage-table-tooltip {

@@ -1,7 +1,25 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import { Popover, Button, DatePicker } from 'antd';
-import { CaretDownOutlined } from '@ant-design/icons';
+import { CaretDownOutlined, CloseCircleFilled } from '@ant-design/icons';
 import moment, { unitOfTime, Moment } from 'moment';
+import classNames from 'classnames';
+import _ from 'lodash';
 import './index.less';
 import { useTranslation } from 'react-i18next';
 import { TooltipPlacement } from 'antd/es/tooltip';
@@ -13,7 +31,8 @@ interface Props {
   unit?: TimeUnit;
   value?: Range;
   showRight?: boolean;
-  onChange: (value: Range) => void;
+  nullable?: boolean;
+  onChange?: (value: Range) => void;
 }
 
 export type Range = RelativeRange | AbsoluteRange;
@@ -22,6 +41,7 @@ export interface RelativeRange {
   num: number;
   unit: unitOfTime.DurationConstructor;
   description: string;
+  refreshFlag?: string; // 用于刷新的标识
 }
 
 export interface AbsoluteRange {
@@ -73,30 +93,32 @@ export default function DateRangePicker(props: Props) {
     { num: 1, unit: 'month', description: t('月') },
     { num: 1, unit: 'quarter', description: t('季度') },
   ];
-  const { onChange, value, unit = 's', showRight = true, placement = 'bottom', leftList = LeftItems } = props;
+  const { onChange, value, unit = 's', showRight = true, placement = 'bottom', leftList = LeftItems, nullable = false } = props;
   const [visible, setVisible] = useState(false);
   const [startTime, setStartTime] = useState<Moment>(moment());
   const [endTime, setEndTime] = useState<Moment>(moment());
   const [leftSelect, setLeftSelect] = useState<number>(-1);
-  const [label, setLabel] = useState<string>();
+  const [label, setLabel] = useState<string>('选择时间');
   const isDatePickerOpen = useRef(false);
 
   useEffect(() => {
     if (!value) {
-      const defaultSelect = 3;
-      setLeftSelect(defaultSelect);
-      emitValue(leftList[defaultSelect]);
+      if (!nullable) {
+        const defaultSelect = localStorage.getItem('relativeDateIndex') ? Number(localStorage.getItem('relativeDateIndex')) : 3;
+        setLeftSelect(defaultSelect);
+        emitValue(leftList[defaultSelect]);
+      }
       return;
     }
     // 如果外部被赋值，只需要改label和组件展示值，不需要向外抛
     if (isAbsoluteRange(value)) {
       value.start > 0 && value.end > 0 && formatExternalAbsoluteTime(value);
     } else {
-      const i = leftList.findIndex(({ num, unit }) => num === value.num && unit === value.unit);
+      const i = leftList.findIndex(({ num, unit }) => num === value?.num && unit === value.unit);
       setLeftSelect(i === -1 ? 0 : i);
       emitValue(leftList[i]);
     }
-  }, [value]);
+  }, [JSON.stringify(value)]);
 
   const formatLabel = (r: Range, unit: TimeUnit): string => {
     if (isAbsoluteRange(r)) {
@@ -142,6 +164,7 @@ export default function DateRangePicker(props: Props) {
   const handleRightOk = () => {
     setVisible(false);
     setLeftSelect(-1);
+    localStorage.setItem('relativeDateIndex', '');
     emitValue({
       start: unit === 's' ? startTime.unix() : startTime.valueOf(),
       end: unit === 's' ? endTime.unix() : endTime.valueOf(),
@@ -150,13 +173,20 @@ export default function DateRangePicker(props: Props) {
 
   const handleLeftClick = (i) => {
     setLeftSelect(i);
+    localStorage.setItem('relativeDateIndex', i);
     emitValue(leftList[i]);
     setVisible(false);
   };
 
-  const emitValue = (value: Range) => {
-    onChange(value);
-    setLabel(formatLabel(value, unit));
+  const emitValue = (val: Range) => {
+    if (!_.isEqual(_.omit(value, 'refreshFlag'), _.omit(val, 'refreshFlag'))) {
+      onChange && onChange(val);
+    }
+    if (val) {
+      setLabel(formatLabel(val, unit));
+    } else {
+      setLabel('选择时间');
+    }
   };
 
   const content = (
@@ -214,8 +244,21 @@ export default function DateRangePicker(props: Props) {
       getPopupContainer={() => document.body}
       onVisibleChange={(visible) => (visible || !isDatePickerOpen.current) && setVisible(visible)}
     >
-      <Button>
+      <Button
+        className={classNames({
+          'time-range-picker-target-nullable': nullable,
+        })}
+      >
         {label} <CaretDownOutlined />
+        {nullable && (
+          <CloseCircleFilled
+            onClick={(e) => {
+              e.stopPropagation();
+              e.nativeEvent.stopImmediatePropagation();
+              emitValue(undefined as any);
+            }}
+          />
+        )}
       </Button>
     </Popover>
   );

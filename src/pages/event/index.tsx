@@ -1,25 +1,41 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PageLayout from '@/components/pageLayout';
-import { AlertOutlined, ExclamationCircleOutlined, SearchOutlined, DownOutlined } from '@ant-design/icons';
+import { AlertOutlined, ExclamationCircleOutlined, SearchOutlined, DownOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import LeftTree from '@/components/LeftTree';
 import DataTable from '@/components/Dantd/components/data-table';
 import moment from 'moment';
-import { Button, Input, message, Modal, Tag, Tooltip, Menu, Dropdown, Radio } from 'antd';
-import DateRangePicker, { RelativeRange } from '@/components/DateRangePicker';
-import { priorityColor } from '@/utils/constant';
+import { Button, Input, message, Modal, Tag, Menu, Dropdown } from 'antd';
+
 import { useHistory } from 'react-router';
-import './index.less';
-import { deleteAlertEvents } from '@/services/warning';
+import { useInterval } from 'ahooks';
 import { useDispatch, useSelector } from 'react-redux';
+import DateRangePicker, { RelativeRange } from '@/components/DateRangePicker';
+import { deleteAlertEvents } from '@/services/warning';
 import { RootState } from '@/store/common';
 import { eventStoreState } from '@/store/eventInterface';
-import { CommonStoreState } from '@/store/commonInterface';
-import BlankBusinessPlaceholder from '@/components/BlankBusinessPlaceholder';
-import { useInterval } from 'ahooks';
-const { confirm } = Modal;
+import ColumnSelect from '@/components/ColumnSelect';
 import RefreshIcon from '@/components/RefreshIcon';
+import Card from './card';
+import './index.less';
 
+const { confirm } = Modal;
+export const SeverityColor = ['red', 'orange', 'yellow', 'green'];
 export function deleteAlertEventsModal(busiId, ids: number[], onSuccess = () => {}) {
   confirm({
     title: '删除告警事件',
@@ -28,6 +44,7 @@ export function deleteAlertEventsModal(busiId, ids: number[], onSuccess = () => 
     okText: '确认删除',
     maskClosable: true,
     okButtonProps: { danger: true },
+    zIndex: 1001,
     onOk() {
       return deleteAlertEvents(busiId, ids).then((res) => {
         message.success('删除成功');
@@ -41,9 +58,11 @@ export function deleteAlertEventsModal(busiId, ids: number[], onSuccess = () => 
 const Event: React.FC = () => {
   const history = useHistory();
   const { t } = useTranslation();
+  const [view, setView] = useState<'card' | 'list'>('card');
   const dispatch = useDispatch();
-  const { busiGroups, curClusterItems } = useSelector<RootState, CommonStoreState>((state) => state.common);
-  const { severity, hourRange, queryContent } = useSelector<RootState, eventStoreState>((state) => state.event);
+  const [severity, setSeverity] = useState<number>();
+  const [curClusterItems, setCurClusterItems] = useState<string[]>([]);
+  const { hourRange, queryContent } = useSelector<RootState, eventStoreState>((state) => state.event);
   const DateRangeItems: RelativeRange[] = useMemo(
     () => [
       { num: 6, unit: 'hours', description: t('hours') },
@@ -62,6 +81,9 @@ const Event: React.FC = () => {
   const tableRef = useRef({
     handleReload() {},
   });
+  const cardRef = useRef({
+    reloadCard() {},
+  });
   const isAddTagToQueryInput = useRef(false);
   const [curBusiId, setCurBusiId] = useState<number>(-1);
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
@@ -69,14 +91,7 @@ const Event: React.FC = () => {
 
   useInterval(
     () => {
-      tableRef.current.handleReload();
-      const busiIds = busiGroups.map((busiItem) => busiItem.id);
-      if (busiIds.length) {
-        dispatch({
-          type: 'event/refreshAlertings',
-          ids: busiIds,
-        });
-      }
+      view === 'list' ? tableRef.current.handleReload() : cardRef.current.reloadCard();
     },
     interval > 0 ? interval * 1000 : undefined,
   );
@@ -88,80 +103,36 @@ const Event: React.FC = () => {
       width: 120,
     },
     {
-      title: t('级别'),
-      dataIndex: 'severity',
-      width: 70,
-      render: (severity) => {
-        return <Tag color={priorityColor[severity - 1]}>S{severity}</Tag>;
-      },
-    },
-    {
-      title: t('规则标题'),
+      title: t('规则标题&事件标签'),
       dataIndex: 'rule_name',
-      render(title, { id }) {
-        return (
-          <a style={{ padding: 0 }} onClick={() => history.push(`/alert-cur-events/${id}`)}>
-            {title}
-          </a>
-        );
-      },
-    },
-    {
-      title: t('事件标签'),
-      dataIndex: 'tags',
-      // ellipsis: {
-      //   showTitle: false,
-      // },
-      render(tagArr) {
+      render(title, { id, tags }) {
         const content =
-          tagArr &&
-          tagArr
-            .sort((a, b) => a.length - b.length)
-            .map((item) => (
-              <Tag
-                color='blue'
-                key={item}
-                onClick={(e) => {
-                  if (!queryContent.includes(item)) {
-                    isAddTagToQueryInput.current = true;
-                    saveData('queryContent', queryContent ? `${queryContent.trim()} ${item}` : item);
-                  }
-                }}
-              >
-                {item}
-              </Tag>
-            ));
+          tags &&
+          tags.map((item) => (
+            <Tag
+              color='purple'
+              key={item}
+              onClick={(e) => {
+                if (!queryContent.includes(item)) {
+                  isAddTagToQueryInput.current = true;
+                  saveData('queryContent', queryContent ? `${queryContent.trim()} ${item}` : item);
+                }
+              }}
+            >
+              {item}
+            </Tag>
+          ));
         return (
-          tagArr && (
-            // <Tooltip title={content} placement='topLeft' getPopupContainer={() => document.body} overlayClassName='mon-manage-table-tooltip'>
-            <span className='event-tags'>{content}</span>
-            // </Tooltip>
-          )
-        );
-      },
-    },
-    {
-      title: t('告警接收组'),
-      dataIndex: 'notify_groups_obj',
-      ellipsis: {
-        showTitle: false,
-      },
-      render(tagArr) {
-        const content =
-          tagArr &&
-          tagArr
-            .sort((a, b) => a.name.length - b.name.length)
-            .map((item) => (
-              <Tag color='blue' key={item.id}>
-                {item.name}
-              </Tag>
-            ));
-        return (
-          tagArr && (
-            <Tooltip title={content} placement='topLeft' getPopupContainer={() => document.body}>
-              {content}
-            </Tooltip>
-          )
+          <>
+            <div>
+              <a style={{ padding: 0 }} onClick={() => history.push(`/alert-cur-events/${id}`)}>
+                {title}
+              </a>
+            </div>
+            <div>
+              <span className='event-tags'>{content}</span>
+            </div>
+          </>
         );
       },
     },
@@ -185,6 +156,8 @@ const Event: React.FC = () => {
               type='link'
               onClick={() => {
                 history.push('/alert-mutes/add', {
+                  group_id: record.group_id,
+                  cluster: record.cluster,
                   tags: record.tags.map((tag) => {
                     const [key, value] = tag.split('=');
                     return {
@@ -205,8 +178,7 @@ const Event: React.FC = () => {
               onClick={() =>
                 deleteAlertEventsModal(curBusiId, [record.id], () => {
                   setSelectedRowKeys(selectedRowKeys.filter((key) => key !== record.id));
-                  tableRef.current.handleReload();
-                  refreashAlertings();
+                  view === 'list' && tableRef.current.handleReload();
                 })
               }
             >
@@ -226,13 +198,6 @@ const Event: React.FC = () => {
     });
   }
 
-  function refreashAlertings() {
-    dispatch({
-      type: 'event/refreshAlertings',
-      ids: busiGroups.map((busiItem) => busiItem.id),
-    });
-  }
-
   function renderLeftHeader() {
     const intervalItems: RelativeRange[] = [
       { num: 0, unit: 'second', description: 'off' },
@@ -244,7 +209,7 @@ const Event: React.FC = () => {
     const menu = (
       <Menu
         onClick={(e) => {
-          setInterval(e.key as number);
+          setInterval(e.key as any);
         }}
       >
         {intervalItems.map(({ num, description }) => (
@@ -256,13 +221,11 @@ const Event: React.FC = () => {
       </Menu>
     );
     return (
-      <div className='table-operate-box'>
+      <div className='table-operate-box' style={{ background: '#fff' }}>
         <div className='left'>
-          <Dropdown overlay={menu}>
-            <Button className='interval-btn' icon={<DownOutlined />}>
-              {interval > 0 ? interval + 's' : 'off'}
-            </Button>
-          </Dropdown>
+          <Button icon={<AppstoreOutlined />} onClick={() => setView('card')} />
+          <Button icon={<UnorderedListOutlined />} onClick={() => setView('list')} style={{ marginLeft: 8, marginRight: 8 }} />
+
           <DateRangePicker
             showRight={false}
             leftList={DateRangeItems}
@@ -273,29 +236,47 @@ const Event: React.FC = () => {
               }
             }}
           />
+          <ColumnSelect
+            onSeverityChange={(e) => setSeverity(e)}
+            onBusiGroupChange={(e) => setCurBusiId(typeof e === 'number' ? e : -1)}
+            onClusterChange={(e) => setCurClusterItems(e)}
+          />
           <Input
             className='search-input'
             prefix={<SearchOutlined />}
             placeholder='模糊搜索规则和标签(多个关键词请用空格分隔)'
             value={queryContent}
             onChange={(e) => saveData('queryContent', e.target.value)}
-            onPressEnter={(e) => tableRef.current.handleReload()}
+            onPressEnter={(e) => view === 'list' && tableRef.current.handleReload()}
           />
         </div>
         <div className='right'>
-          <Button
-            danger
-            disabled={selectedRowKeys.length === 0}
-            onClick={() =>
-              deleteAlertEventsModal(curBusiId, selectedRowKeys, () => {
-                setSelectedRowKeys([]);
-                tableRef.current.handleReload();
-                refreashAlertings();
-              })
-            }
-          >
-            批量删除
-          </Button>
+          {view === 'list' && (
+            <Button
+              danger
+              style={{ marginRight: 8 }}
+              disabled={selectedRowKeys.length === 0}
+              onClick={() =>
+                deleteAlertEventsModal(curBusiId, selectedRowKeys, () => {
+                  setSelectedRowKeys([]);
+                  view === 'list' && tableRef.current.handleReload();
+                })
+              }
+            >
+              批量删除
+            </Button>
+          )}
+          <RefreshIcon
+            onClick={() => {
+              view === 'list' && tableRef.current.handleReload();
+              view === 'card' && cardRef.current.reloadCard();
+            }}
+          />
+          <Dropdown overlay={menu}>
+            <Button className='interval-btn' icon={<DownOutlined />}>
+              {interval > 0 ? interval + 's' : 'off'}
+            </Button>
+          </Dropdown>
         </div>
       </div>
     );
@@ -303,62 +284,49 @@ const Event: React.FC = () => {
 
   useEffect(() => {
     if (isAddTagToQueryInput.current) {
-      tableRef.current.handleReload();
+      view === 'list' && tableRef.current.handleReload();
       isAddTagToQueryInput.current = false;
     }
   }, [queryContent]);
 
   useEffect(() => {
-    tableRef.current.handleReload();
-  }, [curClusterItems, severity, hourRange]);
-
-  // 获取活跃告警数量
-  useEffect(() => {
-    const busiIds = busiGroups.map((busiItem) => busiItem.id);
-    if (busiIds.length) {
-      dispatch({
-        type: 'event/refreshAlertings',
-        ids: busiIds,
-      });
-    }
-  }, [busiGroups]);
+    view === 'list' && tableRef.current.handleReload();
+  }, [curClusterItems, severity, hourRange, curBusiId, view]);
 
   return (
     <PageLayout icon={<AlertOutlined />} title={t('活跃告警')} hideCluster>
       <div className='event-content cur-events'>
-        <LeftTree
-          clusterGroup={{
-            isShow: true,
-          }}
-          busiGroup={{
-            showAlertings: true,
-            onChange(value) {
-              setCurBusiId(typeof value === 'number' ? value : -1);
-            },
-          }}
-          eventLevelGroup={{
-            isShow: true,
-            defaultSelect: severity,
-            onChange(v: number | undefined) {
-              saveData('severity', v);
-            },
-          }}
-        />
-        <div className='table-area'>
-          {curBusiId !== -1 ? (
+        <div className='table-area' style={{ padding: view === 'card' ? 0 : undefined }}>
+          {view === 'card' ? (
+            <div style={{ width: '100%', height: '100%', background: '#eee' }}>
+              <Card
+                ref={cardRef}
+                header={renderLeftHeader()}
+                filter={Object.assign(
+                  { hours: hourRange.unit !== 'hours' ? hourRange.num * 24 : hourRange.num },
+                  curClusterItems.length ? { clusters: curClusterItems.join(',') } : {},
+                  severity ? { severity } : {},
+                  queryContent ? { query: queryContent } : {},
+                  { bgid: curBusiId },
+                )}
+              />
+            </div>
+          ) : (
             <DataTable
               ref={tableRef}
               antProps={{
                 rowKey: 'id',
+                rowClassName: (record: { severity: number }, index) => {
+                  return SeverityColor[record.severity - 1] + '-left-border';
+                },
                 rowSelection: {
                   selectedRowKeys: selectedRowKeys,
                   onChange(selectedRowKeys, selectedRows) {
                     setSelectedRowKeys(selectedRowKeys.map((key) => Number(key)));
                   },
                 },
-                // scroll: { x: 'max-content' },
               }}
-              url={`/api/n9e/busi-group/${curBusiId}/alert-cur-events`}
+              url={`/api/n9e/alert-cur-events/list`}
               customQueryCallback={(data) =>
                 Object.assign(
                   data,
@@ -366,6 +334,7 @@ const Event: React.FC = () => {
                   curClusterItems.length ? { clusters: curClusterItems.join(',') } : {},
                   severity ? { severity } : {},
                   queryContent ? { query: queryContent } : {},
+                  { bgid: curBusiId },
                 )
               }
               pageParams={{
@@ -380,12 +349,11 @@ const Event: React.FC = () => {
               })}
               columns={columns}
               reloadBtnType='btn'
-              reloadBtnPos='left'
+              reloadBtnPos='right'
+              showReloadBtn
               filterType='flex'
               leftHeader={renderLeftHeader()}
             />
-          ) : (
-            <BlankBusinessPlaceholder text='活跃告警' />
           )}
         </div>
       </div>

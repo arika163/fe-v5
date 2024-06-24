@@ -1,32 +1,51 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PageLayout from '@/components/pageLayout';
 import { AlertOutlined, SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import LeftTree from '@/components/LeftTree';
 import DataTable from '@/components/Dantd/components/data-table';
 import moment from 'moment';
-import { Button, Input, Modal, Tag, Tooltip } from 'antd';
+import { Input, Tag, Select, Button, message } from 'antd';
 import DateRangePicker, { RelativeRange } from '@/components/DateRangePicker';
-import { priorityColor } from '@/utils/constant';
-import { useHistory } from 'react-router';
+import { Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store/common';
 import { eventStoreState } from '@/store/eventInterface';
-import { CommonStoreState } from '@/store/commonInterface';
-import BlankBusinessPlaceholder from '@/components/BlankBusinessPlaceholder';
-// import './index.less';
+import ColumnSelect from '@/components/ColumnSelect';
+import AdvancedWrap from '@/components/AdvancedWrap';
+import ClusterSelect from './ClusterSelect';
+import { SeverityColor } from '../event';
+import exportEvents, { downloadFile } from './exportEvents';
+import '../event/index.less';
 
 const Event: React.FC = () => {
-  const history = useHistory();
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const tableRef = useRef({
     handleReload() {},
   });
-  const { curClusterItems } = useSelector<RootState, CommonStoreState>((state) => state.common);
-  const { hisSeverity, hisEventType, hisHourRange, hisQueryContent } = useSelector<RootState, eventStoreState>((state) => state.event);
+  const { hisHourRange, hisQueryContent } = useSelector<RootState, eventStoreState>((state) => state.event);
+  const [hisSeverity, setHisSeverity] = useState<number>();
+  const [hisEventType, setHisEventType] = useState<number>();
+  const [curClusterItems, setCurClusterItems] = useState<string[]>([]);
   const isAddTagToQueryInput = useRef(false);
   const [curBusiId, setCurBusiId] = useState<number>(-1);
+  const [cate, setCate] = useState<string>();
   const DateRangeItems: RelativeRange[] = useMemo(
     () => [
       { num: 6, unit: 'hours', description: t('hours') },
@@ -50,91 +69,45 @@ const Event: React.FC = () => {
       width: 120,
     },
     {
-      title: t('级别'),
-      dataIndex: 'severity',
-      width: 70,
-      render: (severity) => {
-        return <Tag color={priorityColor[severity - 1]}>S{severity}</Tag>;
-      },
-    },
-    {
-      title: t('类别'),
-      dataIndex: 'is_recovered',
-      width: 110,
-      render(isRecovered) {
-        return <Tag color={isRecovered ? 'green' : 'red'}>{isRecovered ? 'Recovered' : 'Triggered'}</Tag>;
-      },
-    },
-    {
-      title: t('规则标题'),
+      title: t('规则标题&事件标签'),
       dataIndex: 'rule_name',
-      render(title, { id }) {
-        return (
-          <a style={{ padding: 0 }} onClick={() => history.push(`/alert-his-events/${id}`)}>
-            {title}
-          </a>
-        );
-      },
-    },
-    {
-      title: t('事件标签'),
-      dataIndex: 'tags',
-      // ellipsis: {
-      //   showTitle: false,
-      // },
-      render(tagArr) {
+      render(title, { id, tags }) {
         const content =
-          tagArr &&
-          tagArr
-            .sort((a, b) => a.length - b.length)
-            .map((item) => (
-              <Tag
-                color='blue'
-                key={item}
-                onClick={(e) => {
-                  if (!hisQueryContent.includes(item)) {
-                    isAddTagToQueryInput.current = true;
-                    saveData('hisQueryContent', hisQueryContent ? `${hisQueryContent.trim()} ${item}` : item);
-                  }
+          tags &&
+          tags.map((item) => (
+            <Tag
+              color='purple'
+              key={item}
+              onClick={(e) => {
+                if (!hisQueryContent.includes(item)) {
+                  isAddTagToQueryInput.current = true;
+                  saveData('hisQueryContent', hisQueryContent ? `${hisQueryContent.trim()} ${item}` : item);
+                }
+              }}
+            >
+              {item}
+            </Tag>
+          ));
+        return (
+          <>
+            <div>
+              <Link
+                to={{
+                  pathname: `/alert-his-events/${id}`,
                 }}
+                target='_blank'
               >
-                {item}
-              </Tag>
-            ));
-        return (
-          tagArr && (
-            // <Tooltip title={content} placement='topLeft' getPopupContainer={() => document.body} overlayClassName='mon-manage-table-tooltip'>
-            <span className='event-tags'>{content}</span>
-            // </Tooltip>
-          )
+                {title}
+              </Link>
+            </div>
+            <div>
+              <span className='event-tags'>{content}</span>
+            </div>
+          </>
         );
       },
     },
-    {
-      title: t('告警接收组'),
-      dataIndex: 'notify_groups_obj',
-      ellipsis: {
-        showTitle: false,
-      },
-      render(tagArr) {
-        const content =
-          tagArr &&
-          tagArr
-            .sort((a, b) => a.name.length - b.name.length)
-            .map((item) => (
-              <Tag color='blue' key={item.id}>
-                {item.name}
-              </Tag>
-            ));
-        return (
-          tagArr && (
-            <Tooltip title={content} placement='topLeft' getPopupContainer={() => document.body}>
-              {content}
-            </Tooltip>
-          )
-        );
-      },
-    },
+
     {
       title: t('计算时间'),
       dataIndex: 'last_eval_time',
@@ -144,6 +117,8 @@ const Event: React.FC = () => {
       },
     },
   ];
+
+  const [exportBtnLoadding, setExportBtnLoadding] = useState(false);
 
   function renderLeftHeader() {
     return (
@@ -159,6 +134,27 @@ const Event: React.FC = () => {
               }
             }}
           />
+          <AdvancedWrap var='VITE_IS_ALERT_ES_DS'>
+            <Select
+              value={cate}
+              onChange={(val) => {
+                setCate(val);
+              }}
+              style={{ marginLeft: 8, width: 120 }}
+              placeholder='数据源类型'
+              allowClear
+            >
+              <Select.Option value='prometheus'>Prometheus</Select.Option>
+              <Select.Option value='elasticsearch'>Elasticsearch</Select.Option>
+              <Select.Option value='aliyun-sls'>阿里云 SLS</Select.Option>
+            </Select>
+          </AdvancedWrap>
+          <ClusterSelect cate={cate} onClusterChange={(e) => setCurClusterItems(e)} />
+          <ColumnSelect
+            onSeverityChange={(e) => setHisSeverity(e)}
+            onEventTypeChange={(e) => setHisEventType(e)}
+            onBusiGroupChange={(e) => setCurBusiId(typeof e === 'number' ? e : -1)}
+          />
           <Input
             className='search-input'
             prefix={<SearchOutlined />}
@@ -167,6 +163,35 @@ const Event: React.FC = () => {
             onChange={(e) => saveData('hisQueryContent', e.target.value)}
             onPressEnter={(e) => tableRef.current.handleReload()}
           />
+          <Button
+            style={{ marginLeft: 8 }}
+            loading={exportBtnLoadding}
+            onClick={() => {
+              setExportBtnLoadding(true);
+              exportEvents(
+                Object.assign(
+                  { p: 1, limit: 1000000 },
+                  { hours: hisHourRange.unit !== 'hours' ? hisHourRange.num * 24 : hisHourRange.num },
+                  curClusterItems.length ? { clusters: curClusterItems.join(',') } : {},
+                  hisSeverity !== undefined ? { severity: hisSeverity } : {},
+                  hisQueryContent ? { query: hisQueryContent } : {},
+                  hisEventType !== undefined ? { is_recovered: hisEventType } : {},
+                  { bgid: curBusiId },
+                  { cate },
+                ),
+                (err, csv) => {
+                  if (err) {
+                    message.error('导出失败！');
+                  } else {
+                    downloadFile(csv, `告警事件_${moment().format('YYYY-MM-DD_HH-mm-ss')}.csv`);
+                  }
+                  setExportBtnLoadding(false);
+                },
+              );
+            }}
+          >
+            导出
+          </Button>
         </div>
       </div>
     );
@@ -189,73 +214,50 @@ const Event: React.FC = () => {
 
   useEffect(() => {
     tableRef.current.handleReload();
-  }, [curClusterItems, hisSeverity, hisHourRange, hisEventType]);
+  }, [curClusterItems, hisSeverity, hisHourRange, hisEventType, curBusiId, cate]);
 
   return (
     <PageLayout icon={<AlertOutlined />} title={t('历史告警')} hideCluster>
       <div className='event-content'>
-        <LeftTree
-          clusterGroup={{
-            isShow: true,
-          }}
-          busiGroup={{
-            onChange(value) {
-              setCurBusiId(typeof value === 'number' ? value : -1);
-            },
-          }}
-          eventLevelGroup={{
-            isShow: true,
-            defaultSelect: hisSeverity,
-            onChange(v: number | undefined) {
-              saveData('hisSeverity', v);
-            },
-          }}
-          eventTypeGroup={{
-            isShow: true,
-            defaultSelect: hisEventType,
-            onChange(v: 0 | 1 | undefined) {
-              saveData('hisEventType', v);
-            },
-          }}
-        />
         <div className='table-area'>
-          {curBusiId !== -1 ? (
-            <DataTable
-              ref={tableRef}
-              antProps={{
-                rowKey: 'id',
-                // scroll: { x: 'max-content' },
-              }}
-              url={`/api/n9e/busi-group/${curBusiId}/alert-his-events`}
-              customQueryCallback={(data) =>
-                Object.assign(
-                  data,
-                  { hours: hisHourRange.unit !== 'hours' ? hisHourRange.num * 24 : hisHourRange.num },
-                  curClusterItems.length ? { clusters: curClusterItems.join(',') } : {},
-                  hisSeverity !== undefined ? { severity: hisSeverity } : {},
-                  hisQueryContent ? { query: hisQueryContent } : {},
-                  hisEventType !== undefined ? { is_recovered: hisEventType } : {},
-                )
-              }
-              pageParams={{
-                curPageName: 'p',
-                pageSizeName: 'limit',
-                pageSize: 30,
-                pageSizeOptions: ['30', '100', '200', '500'],
-              }}
-              apiCallback={({ dat: { list: data, total } }) => ({
+          <DataTable
+            ref={tableRef}
+            antProps={{
+              rowKey: 'id',
+              rowClassName: (record: { severity: number; is_recovered: number }, index) => {
+                return SeverityColor[record.is_recovered ? 3 : record.severity - 1] + '-left-border';
+              },
+              // scroll: { x: 'max-content' },
+            }}
+            url={`/api/n9e/alert-his-events/list`}
+            customQueryCallback={(data) =>
+              Object.assign(
                 data,
-                total,
-              })}
-              columns={columns}
-              reloadBtnType='btn'
-              reloadBtnPos='left'
-              filterType='flex'
-              leftHeader={renderLeftHeader()}
-            />
-          ) : (
-            <BlankBusinessPlaceholder text='历史告警' />
-          )}
+                { hours: hisHourRange.unit !== 'hours' ? hisHourRange.num * 24 : hisHourRange.num },
+                curClusterItems.length ? { clusters: curClusterItems.join(',') } : {},
+                hisSeverity !== undefined ? { severity: hisSeverity } : {},
+                hisQueryContent ? { query: hisQueryContent } : {},
+                hisEventType !== undefined ? { is_recovered: hisEventType } : {},
+                { bgid: curBusiId },
+                { cate },
+              )
+            }
+            pageParams={{
+              curPageName: 'p',
+              pageSizeName: 'limit',
+              pageSize: 30,
+              pageSizeOptions: ['30', '100', '200', '500'],
+            }}
+            apiCallback={({ dat: { list: data, total } }) => ({
+              data,
+              total,
+            })}
+            columns={columns}
+            reloadBtnType='btn'
+            reloadBtnPos='left'
+            filterType='flex'
+            leftHeader={renderLeftHeader()}
+          />
         </div>
       </div>
     </PageLayout>

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import request from '@/utils/request';
 import { RequestMethod, IBasePagingParams } from '@/store/common';
 import type { MetricListRes, strategyGroup, strategyStatus, TagKeysRes, TagValuesRes } from '@/store/warningInterface';
@@ -86,7 +102,7 @@ export const getMetrics = function (params = {}) {
     method: RequestMethod.Get,
     params,
     paramsSerializer: function (params) {
-      return queryString.stringify(params, {arrayFormat: 'bracket'})
+      return queryString.stringify(params, { arrayFormat: 'bracket' });
     },
   });
 };
@@ -154,10 +170,13 @@ export const batchDeleteStrategy = function (ruleId, ids: Array<number>) {
   });
 };
 
-export const prometheusQuery = function (data): Promise<any> {
+export const prometheusQuery = function (data, cluster): Promise<any> {
   return request(`/api/n9e/prometheus/api/v1/query`, {
     method: RequestMethod.Get,
     params: data,
+    headers: {
+      'X-Cluster': cluster,
+    },
   });
 };
 
@@ -168,6 +187,7 @@ export const updateAlertRules = function (
   data: {
     ids: React.Key[];
     fields: any;
+    action?: string;
   },
   busiId: number,
 ) {
@@ -220,7 +240,7 @@ export function getHistoryEventsById(busiId, eventId) {
  * 批量删除(忽略)告警历史
  */
 export const deleteAlertEvents = function (busiId, ids: Array<number | string>) {
-  return request(`/api/n9e/busi-group/${busiId}/alert-cur-events`, {
+  return request(`/api/n9e/alert-cur-events`, {
     method: RequestMethod.Delete,
     data: {
       ids,
@@ -288,4 +308,172 @@ export const updateAlertEventsAppendTags = function (ids: Array<number>, append_
       append_tags,
     },
   });
+};
+
+export const getBuiltinAlerts = function () {
+  return request('/api/n9e/alert-rules/builtin/list', {
+    method: RequestMethod.Get,
+  });
+};
+
+export const createBuiltinAlerts = function (name: string, cluster: string, id: number) {
+  return request(`/api/n9e/busi-group/${id}/alert-rules/builtin`, {
+    method: RequestMethod.Post,
+    data: { name, cluster },
+  });
+};
+
+export const getAggrAlerts = function () {
+  return request('/api/n9e/alert-aggr-views', {
+    method: RequestMethod.Get,
+  });
+};
+
+export const AddAggrAlerts = function (data) {
+  return request('/api/n9e/alert-aggr-views', {
+    method: RequestMethod.Post,
+    data,
+  });
+};
+
+export const updateAggrAlerts = function (data) {
+  return request('/api/n9e/alert-aggr-views', {
+    method: RequestMethod.Put,
+    data,
+  });
+};
+
+export const deleteAggrAlerts = function (ids: number[]) {
+  return request('/api/n9e/alert-aggr-views', {
+    method: RequestMethod.Delete,
+    data: { ids },
+  });
+};
+
+export const getAlertCards = function (params) {
+  return request('/api/n9e/alert-cur-events/card', {
+    method: RequestMethod.Get,
+    params,
+  });
+};
+
+export const getCardDetail = function (ids) {
+  return request('/api/n9e/alert-cur-events/card/details', {
+    method: RequestMethod.Post,
+    data: { ids },
+  });
+};
+
+export const getBrainData = function (params) {
+  return request('/api/fc-brain/data', {
+    method: RequestMethod.Get,
+    params,
+  });
+};
+
+export const getBrainParams = function () {
+  return request('/api/fc-brain/params', {
+    method: RequestMethod.Get,
+  }).then((res) => {
+    return res.data;
+  });
+};
+
+export const checkBrainPromql = function (data) {
+  return request('/api/fc-brain/promql-check', {
+    method: RequestMethod.Post,
+    data,
+    silence: true,
+  }).then((res) => {
+    return res.data;
+  });
+};
+
+export const getBrainJobs = function (id) {
+  return request('/api/fc-brain/jobs', {
+    method: RequestMethod.Get,
+    params: {
+      id,
+    },
+  }).then((res) => {
+    return res.data;
+  });
+};
+
+export function getBrainLicense() {
+  return request('/api/fc-brain/license', {
+    method: RequestMethod.Get,
+    silence: true,
+  });
+}
+
+export function getDsQuery(params) {
+  return request('/api/n9e-plus/ds-query', {
+    method: RequestMethod.Post,
+    data: params,
+    headers: {
+      'X-Cluster': 'Default',
+    },
+    silence: true,
+  });
+}
+
+export function getLogQuery(params) {
+  return request('/api/n9e-plus/log-query', {
+    method: RequestMethod.Post,
+    data: params,
+    headers: {
+      'X-Cluster': 'Default',
+    },
+    silence: true,
+  });
+}
+
+export function getIndices(params) {
+  return request('/api/n9e-plus/indices', {
+    method: RequestMethod.Post,
+    data: params,
+    headers: {
+      'X-Cluster': 'Default',
+    },
+  });
+}
+
+export function getFields(params) {
+  return request('/api/n9e-plus/fields', {
+    method: RequestMethod.Post,
+    data: params,
+    headers: {
+      'X-Cluster': 'Default',
+    },
+    silence: true,
+  });
+}
+
+export function getEventTSQuery(params) {
+  return request('/api/n9e-plus/event-ts-query', {
+    method: RequestMethod.Post,
+    data: params,
+  });
+}
+
+export function getEventLogQuery(params) {
+  return request('/api/n9e-plus/event-log-query', {
+    method: RequestMethod.Post,
+    data: params,
+  });
+}
+
+export function getLogsQuery(params) {
+  return request('/api/n9e-plus/logs-query', {
+    method: RequestMethod.Post,
+    data: params,
+  });
+}
+
+export const getAlertEventList = function (params) {
+  return request('/api/n9e/alert-his-events/list', {
+    method: RequestMethod.Get,
+    params,
+  }).then((res) => res?.dat?.list || []);
 };

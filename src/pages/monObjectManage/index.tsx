@@ -1,15 +1,34 @@
-import React, { useEffect, useRef, useState } from 'react';
-import PageLayout from '@/components/pageLayout';
-import LeftTree from '@/components/LeftTree';
-import { DatabaseOutlined, DownOutlined, SearchOutlined } from '@ant-design/icons';
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+import React, { useEffect, useState, useCallback } from 'react';
+import { Modal, Tag, Form, Input, Alert, Select, Tooltip, message } from 'antd';
+import { DatabaseOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import './index.less';
+import _, { debounce } from 'lodash';
+import classNames from 'classnames';
+import { useDispatch, useSelector } from 'react-redux';
 import { bindTags, unbindTags, moveTargetBusi, updateTargetNote, deleteTargets, getTargetTags } from '@/services/monObjectManage';
 import { RootState } from '@/store/common';
-import DataTable from '@/components/Dantd/components/data-table';
-import { Button, Dropdown, Menu, Modal, Tag, Form, Input, Alert, Select, Tooltip, message } from 'antd';
-import { BusiGroupItem, CommonStoreState } from '@/store/commonInterface';
-import { useSelector } from 'react-redux';
+import { CommonStoreState } from '@/store/commonInterface';
+import PageLayout from '@/components/pageLayout';
+import { getBusiGroups } from '@/services/common';
+import List from './List';
+import BusinessGroup from './BusinessGroup';
+import './index.less';
 
 enum OperateType {
   BindTag = 'bindTag',
@@ -19,17 +38,6 @@ enum OperateType {
   UpdateNote = 'updateNote',
   Delete = 'delete',
   None = 'none',
-}
-
-interface targetProps {
-  id: number;
-  cluster: string;
-  group_id: number;
-  group_obj: object | null;
-  ident: string;
-  note: string;
-  tags: string[];
-  update_at: number;
 }
 
 interface OperateionModalProps {
@@ -56,11 +64,7 @@ const bindTagDetail = () => {
   function tagRender(content) {
     const { isCorrectFormat, isLengthAllowed } = isTagValid(content.value);
     return isCorrectFormat && isLengthAllowed ? (
-      <Tag
-        closable={content.closable}
-        onClose={content.onClose}
-        // style={{ marginTop: '2px' }}
-      >
+      <Tag closable={content.closable} onClose={content.onClose}>
         {content.value}
       </Tag>
     ) : (
@@ -117,31 +121,6 @@ const unbindTagDetail = (tagsList) => {
   };
 };
 
-// 修改业务组弹窗内容
-const updateBusiDetail = (busiGroups) => {
-  return {
-    operateTitle: '修改业务组',
-    requestFunc: moveTargetBusi,
-    isFormItem: true,
-    render() {
-      return (
-        <Form.Item label='归属业务组' name='bgid' rules={[{ required: true, message: '请选择归属业务组！' }]}>
-          <Select
-            showSearch
-            style={{ width: '100%' }}
-            placeholder='请选择归属业务组'
-            options={busiGroups.map(({ id, name }) => ({
-              label: name,
-              value: id,
-            }))}
-            optionFilterProp='label'
-          />
-        </Form.Item>
-      );
-    },
-  };
-};
-
 // 移出业务组弹窗内容
 const removeBusiDetail = () => {
   return {
@@ -182,23 +161,6 @@ const deleteDetail = () => {
   };
 };
 
-const operateDetail = {
-  bindTagDetail,
-  unbindTagDetail,
-  updateBusiDetail,
-  removeBusiDetail,
-  updateNoteDetail,
-  deleteDetail,
-  noneDetail: () => ({
-    operateTitle: '',
-    requestFunc() {
-      return Promise.resolve();
-    },
-    isFormItem: false,
-    render() {},
-  }),
-};
-
 const OperationModal: React.FC<OperateionModalProps> = ({ operateType, setOperateType, idents, reloadList }) => {
   const { busiGroups } = useSelector<RootState, CommonStoreState>((state) => state.common);
   const [form] = Form.useForm();
@@ -206,8 +168,62 @@ const OperationModal: React.FC<OperateionModalProps> = ({ operateType, setOperat
   const [identList, setIdentList] = useState<string[]>(idents);
   const [tagsList, setTagsList] = useState<string[]>([]);
   const detailProp = operateType === OperateType.UnbindTag ? tagsList : busiGroups;
-  const { operateTitle, requestFunc, isFormItem, render } = operateDetail[`${operateType}Detail`](detailProp);
 
+  // 修改业务组弹窗内容
+  const updateBusiDetail = (busiGroups) => {
+    return {
+      operateTitle: '修改业务组',
+      requestFunc: moveTargetBusi,
+      isFormItem: true,
+      render() {
+        return (
+          <Form.Item label='归属业务组' name='bgid' rules={[{ required: true, message: '请选择归属业务组！' }]}>
+            <Select
+              showSearch
+              style={{ width: '100%' }}
+              placeholder='请选择归属业务组'
+              options={filteredBusiGroups.map(({ id, name }) => ({
+                label: name,
+                value: id,
+              }))}
+              optionFilterProp='label'
+              filterOption={false}
+              onSearch={handleSearch}
+              onFocus={() => {
+                getBusiGroups('').then((res) => {
+                  setFilteredBusiGroups(res.dat || []);
+                });
+              }}
+              onClear={() => {
+                getBusiGroups('').then((res) => {
+                  setFilteredBusiGroups(res.dat || []);
+                });
+              }}
+            />
+          </Form.Item>
+        );
+      },
+    };
+  };
+
+  const operateDetail = {
+    bindTagDetail,
+    unbindTagDetail,
+    updateBusiDetail,
+    removeBusiDetail,
+    updateNoteDetail,
+    deleteDetail,
+    noneDetail: () => ({
+      operateTitle: '',
+      requestFunc() {
+        return Promise.resolve();
+      },
+      isFormItem: false,
+      render() {},
+    }),
+  };
+  const { operateTitle, requestFunc, isFormItem, render } = operateDetail[`${operateType}Detail`](detailProp);
+  const [filteredBusiGroups, setFilteredBusiGroups] = useState(busiGroups);
   function formatValue() {
     const inputValue = form.getFieldValue('idents');
     const formattedIdents = inputValue.split(/[ ,\n]+/).filter((value) => value);
@@ -241,6 +257,20 @@ const OperationModal: React.FC<OperateionModalProps> = ({ operateType, setOperat
     });
   }
 
+  // 初始化展示所有业务组
+  useEffect(() => {
+    if (!filteredBusiGroups.length) {
+      setFilteredBusiGroups(busiGroups);
+    }
+  }, [busiGroups]);
+
+  const fetchBusiGroup = (e) => {
+    getBusiGroups(e).then((res) => {
+      setFilteredBusiGroups(res.dat || []);
+    });
+  };
+  const handleSearch = useCallback(debounce(fetchBusiGroup, 800), []);
+
   // 点击批量操作时，初始化默认监控对象列表
   useEffect(() => {
     if (operateType !== OperateType.None) {
@@ -266,7 +296,6 @@ const OperationModal: React.FC<OperateionModalProps> = ({ operateType, setOperat
     }
   }, [operateType, identList]);
 
-  console.log('end----');
   return (
     <Modal
       visible={operateType !== 'none'}
@@ -295,201 +324,86 @@ const OperationModal: React.FC<OperateionModalProps> = ({ operateType, setOperat
 };
 
 const MonObjectManage: React.FC = () => {
+  const dispatch = useDispatch();
+  const { curBusiItem } = useSelector<RootState, CommonStoreState>((state) => state.common);
   const { t } = useTranslation();
-  const tableRef = useRef({
-    handleReload() {},
-  });
-  const isAddTagToQueryInput = useRef(false);
-  const [tableQueryContent, setTableQueryContent] = useState<string>('');
   const [operateType, setOperateType] = useState<OperateType>(OperateType.None);
-  const [curClusters, setCurClusters] = useState<string[]>([]);
-  const [curBusiId, setCurBusiId] = useState<number>(-2);
+  const [curBusiId, setCurBusiId] = useState<number>(curBusiItem?.id || -1);
   const [selectedRowKeys, setSelectedRowKeys] = useState<(string | number)[]>([]);
   const [selectedIdents, setSelectedIdents] = useState<string[]>([]);
-
-  const columns = [
-    {
-      title: '集群',
-      dataIndex: 'cluster',
-      width: 100,
-      fixed: 'left' as const,
-    },
-    {
-      title: '标识',
-      dataIndex: 'ident',
-      width: 140,
-    },
-    {
-      title: '标签',
-      dataIndex: 'tags',
-      ellipsis: {
-        showTitle: false,
-      },
-      render(tagArr) {
-        const content =
-          tagArr &&
-          tagArr.map((item) => (
-            <Tag
-              color='blue'
-              key={item}
-              onClick={(e) => {
-                if (!tableQueryContent.includes(item)) {
-                  isAddTagToQueryInput.current = true;
-                  setTableQueryContent(tableQueryContent ? `${tableQueryContent.trim()} ${item}` : item);
-                }
-              }}
-            >
-              {item}
-            </Tag>
-          ));
-        return (
-          tagArr && (
-            <Tooltip title={content} placement='topLeft' getPopupContainer={() => document.body} overlayClassName='mon-manage-table-tooltip'>
-              {content}
-            </Tooltip>
-          )
-        );
-      },
-    },
-    {
-      title: '业务组',
-      dataIndex: 'group_obj',
-      width: 140,
-      render(groupObj: BusiGroupItem | null) {
-        return groupObj ? groupObj.name : '未归组';
-      },
-    },
-    {
-      title: '备注',
-      dataIndex: 'note',
-      ellipsis: {
-        showTitle: false,
-      },
-      render(note) {
-        return (
-          <Tooltip title={note} placement='topLeft' getPopupContainer={() => document.body}>
-            {note}
-          </Tooltip>
-        );
-      },
-    },
-  ];
-
-  function renderLeftHeader() {
-    return (
-      <div className='table-operate-box'>
-        <Input
-          className='search-input'
-          prefix={<SearchOutlined />}
-          placeholder='模糊搜索表格内容(多个关键词请用空格分隔)'
-          value={tableQueryContent}
-          onChange={(e) => setTableQueryContent(e.target.value)}
-          onPressEnter={(e) => tableRef.current.handleReload()}
-        />
-        <Dropdown
-          trigger={['click']}
-          overlay={
-            <Menu
-              onClick={({ key }) => {
-                showOperationModal(key as OperateType);
-              }}
-            >
-              <Menu.Item key={OperateType.BindTag}>绑定标签</Menu.Item>
-              <Menu.Item key={OperateType.UnbindTag}>解绑标签</Menu.Item>
-              <Menu.Item key={OperateType.UpdateBusi}>修改业务组</Menu.Item>
-              <Menu.Item key={OperateType.RemoveBusi}>移出业务组</Menu.Item>
-              <Menu.Item key={OperateType.UpdateNote}>修改备注</Menu.Item>
-              <Menu.Item key={OperateType.Delete}>批量删除</Menu.Item>
-            </Menu>
-          }
-        >
-          <Button>
-            批量操作 <DownOutlined />
-          </Button>
-        </Dropdown>
-      </div>
-    );
-  }
-
-  function showOperationModal(curOperateType: OperateType) {
-    setOperateType(curOperateType);
-  }
-
-  useEffect(() => {
-    tableRef.current.handleReload();
-  }, [curBusiId, curClusters]);
-
-  useEffect(() => {
-    if (isAddTagToQueryInput.current) {
-      tableRef.current.handleReload();
-      isAddTagToQueryInput.current = false;
-    }
-  }, [tableQueryContent]);
+  const [refreshFlag, setRefreshFlag] = useState(_.uniqueId('refreshFlag_'));
 
   return (
     <PageLayout icon={<DatabaseOutlined />} title={t('对象列表')} hideCluster>
       <div className='object-manage-page-content'>
-        <LeftTree
-          clusterGroup={{
-            isShow: true,
-            onChange(value) {
-              setCurClusters(value ? value : []);
-            },
+        <BusinessGroup
+          curBusiId={curBusiId}
+          setCurBusiId={(id, item) => {
+            setCurBusiId(id);
+            dispatch({
+              type: 'common/saveData',
+              prop: 'curBusiItem',
+              data: item,
+            });
+            localStorage.setItem('curBusiItem', JSON.stringify(item));
           }}
-          busiGroup={{
-            showNotGroupItem: true,
-            onChange(value) {
-              setCurBusiId(typeof value === 'number' ? value : -1);
-              setSelectedRowKeys([]);
-              setSelectedIdents([]);
-            },
+          renderHeadExtra={() => {
+            return (
+              <div>
+                <div className='left-area-group-title'>预置筛选</div>
+                <div
+                  className={classNames({
+                    'n9e-metric-views-list-content-item': true,
+                    active: curBusiId === 0,
+                  })}
+                  onClick={() => {
+                    setCurBusiId(0);
+                  }}
+                >
+                  未归组对象
+                </div>
+                <div
+                  className={classNames({
+                    'n9e-metric-views-list-content-item': true,
+                    active: curBusiId === -1,
+                  })}
+                  onClick={() => {
+                    setCurBusiId(-1);
+                  }}
+                >
+                  全部对象
+                </div>
+              </div>
+            );
           }}
         />
-        <div className='table-area'>
-          {curBusiId !== -2 && (
-            <DataTable
-              ref={tableRef}
-              antProps={{
-                rowKey: 'id',
-                rowSelection: {
-                  selectedRowKeys: selectedRowKeys,
-                  onChange(selectedRowKeys, selectedRows: targetProps[]) {
-                    setSelectedRowKeys(selectedRowKeys);
-                    setSelectedIdents(selectedRows ? selectedRows.map(({ ident }) => ident) : []);
-                  },
-                },
-                // scroll: { x: 800, y: 'calc(100vh - 252px)' },
-              }}
-              url='/api/n9e/targets'
-              customQueryCallback={(data) =>
-                Object.assign(
-                  data,
-                  tableQueryContent ? { query: tableQueryContent } : {},
-                  curBusiId !== -1 ? { bgid: curBusiId } : {},
-                  curClusters.length ? { clusters: curClusters.join(',') } : {},
-                )
-              }
-              pageParams={{
-                curPageName: 'p',
-                pageSizeName: 'limit',
-                pageSize: 30,
-                pageSizeOptions: ['30', '100', '200', '500'],
-              }}
-              apiCallback={({ dat: { list: data, total } }) => ({
-                data,
-                total,
-              })}
-              columns={columns}
-              reloadBtnType='btn'
-              reloadBtnPos='left'
-              filterType='flex'
-              leftHeader={renderLeftHeader()}
-            />
-          )}
+        <div
+          className='table-area'
+          style={{
+            height: '100%',
+            overflowY: 'auto',
+          }}
+        >
+          <List
+            curBusiId={curBusiId}
+            selectedIdents={selectedIdents}
+            setSelectedIdents={setSelectedIdents}
+            selectedRowKeys={selectedRowKeys}
+            setSelectedRowKeys={setSelectedRowKeys}
+            refreshFlag={refreshFlag}
+            setRefreshFlag={setRefreshFlag}
+            setOperateType={setOperateType}
+          />
         </div>
       </div>
-
-      <OperationModal operateType={operateType} setOperateType={setOperateType} idents={selectedIdents} reloadList={tableRef.current.handleReload} />
+      <OperationModal
+        operateType={operateType}
+        setOperateType={setOperateType}
+        idents={selectedIdents}
+        reloadList={() => {
+          setRefreshFlag(_.uniqueId('refreshFlag_'));
+        }}
+      />
     </PageLayout>
   );
 };

@@ -1,21 +1,38 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useEffect, useState } from 'react';
-import { GetTmpChartData } from '@/services/metric';
-import { useParams } from 'react-router';
-import DateRangePicker, { isAbsoluteRange, RelativeRange } from '@/components/DateRangePicker';
-import { Range } from '@/components/DateRangePicker';
+import semver from 'semver';
+import { Button, Dropdown, Radio, Menu, Tooltip, Space } from 'antd';
 import { AreaChartOutlined, DownOutlined, FieldNumberOutlined, LineChartOutlined } from '@ant-design/icons';
-import Resolution from '@/components/Resolution';
-import './index.less';
-import { useTranslation } from 'react-i18next';
-import Graph from '@/components/Graph';
-import { GraphDataProps } from '@/components/Graph/Graph/index';
+import { useParams } from 'react-router';
 import _ from 'lodash';
-import { Button, Dropdown, Radio, Menu, Tooltip } from 'antd';
+import { useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
+import { GetTmpChartData } from '@/services/metric';
+import { TimeRangePickerWithRefresh, IRawTimeRange } from '@/components/TimeRangePicker';
+import Resolution from '@/components/Resolution';
+import Graph from '@/components/Graph';
 import { ChartType } from '@/components/D3Charts/src/interface';
 import { HighLevelConfigType } from '@/components/Graph/Graph/index';
-import { useSelector } from 'react-redux';
 import { CommonStoreState } from '@/store/commonInterface';
 import { RootState } from '@/store/common';
+import Renderer from '../dashboard/Renderer/Renderer';
+import { getStepByTimeAndStep } from '../dashboard/utils';
+import './index.less';
 
 export default function Chart() {
   const { t } = useTranslation();
@@ -26,14 +43,13 @@ export default function Chart() {
   const [chartData, setChartData] = useState<
     Array<{
       ref: any;
-      dataProps: GraphDataProps;
+      dataProps: any;
       highLevelConfig: HighLevelConfigType;
     }>
   >([]);
-  const [range, setRange] = useState<Range>({
-    num: 1,
-    unit: 'hour',
-    description: t('小时'),
+  const [range, setRange] = useState<IRawTimeRange>({
+    start: 'now-1h',
+    end: 'now',
   });
   const [step, setStep] = useState<number | null>(null);
   const [chartType, setChartType] = useState<ChartType>(ChartType.Line);
@@ -79,49 +95,64 @@ export default function Chart() {
     </Menu>
   );
 
-  const handleDateChange = (e) => {
-    if (isAbsoluteRange(e) ? !_.isEqual(e, range) : e.num !== (range as RelativeRange).num || e.unit !== (range as RelativeRange).unit) {
-      setRange(e);
-    }
-  };
-
-  const handleRefresh = () => {
-    initChart();
-  };
-
   return (
     <div className='chart-container'>
       {chartData && chartData.length > 0 && curCluster ? (
         <>
           <div className='chart-container-header'>
-            <div className='left'>
-              <DateRangePicker onChange={handleDateChange} value={chartData[0].dataProps.range} />
-              <Resolution onChange={(v) => setStep(v)} initialValue={step} />
-              <Radio.Group
-                options={[
-                  { label: <LineChartOutlined />, value: ChartType.Line },
-                  { label: <AreaChartOutlined />, value: ChartType.StackArea },
-                ]}
-                onChange={(e) => {
-                  e.preventDefault();
-                  setChartType(e.target.value);
-                }}
-                value={chartType}
-                optionType='button'
-                buttonStyle='solid'
-              />
-            </div>
+            <div className='left'></div>
             <div className='right'>
-              <span>集群：</span>
-              <Dropdown overlay={clusterMenu}>
-                <Button>
-                  {curCluster} <DownOutlined />
-                </Button>
-              </Dropdown>
-              {/* <ResfeshIcon onClick={handleRefresh} className='reload-icon' /> */}
+              <Space>
+                <div>
+                  <span>集群：</span>
+                  <Dropdown overlay={clusterMenu}>
+                    <Button>
+                      {curCluster} <DownOutlined />
+                    </Button>
+                  </Dropdown>
+                </div>
+                <TimeRangePickerWithRefresh refreshTooltip={`刷新间隔小于 step(${getStepByTimeAndStep(range, step)}s) 将不会更新数据`} onChange={setRange} value={range} />
+                <Resolution onChange={(v) => setStep(v)} initialValue={step} />
+                {!semver.valid(chartData[0].dataProps?.version) && (
+                  <Radio.Group
+                    options={[
+                      { label: <LineChartOutlined />, value: ChartType.Line },
+                      { label: <AreaChartOutlined />, value: ChartType.StackArea },
+                    ]}
+                    onChange={(e) => {
+                      e.preventDefault();
+                      setChartType(e.target.value);
+                    }}
+                    value={chartType}
+                    optionType='button'
+                    buttonStyle='solid'
+                  />
+                )}
+              </Space>
             </div>
           </div>
-          {chartData.map((item, index) => {
+          {chartData.map((item: any, index) => {
+            if (semver.valid(item.dataProps?.version)) {
+              return (
+                <div style={{ height: 740, border: '1px solid #efefef' }}>
+                  <Renderer
+                    dashboardId={item.id}
+                    key={index}
+                    time={range}
+                    step={step}
+                    values={_.merge({}, item.dataProps, {
+                      options: {
+                        legend: {
+                          displayMode: 'table',
+                        },
+                      },
+                      datasourceName: item.dataProps?.datasourceName || curCluster,
+                    })}
+                    isPreview
+                  />
+                </div>
+              );
+            }
             const newItem = {
               ...item.dataProps,
               range,

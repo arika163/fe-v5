@@ -1,37 +1,56 @@
-import React, { useState, useEffect } from 'react';
-import { Form, Input, Card, Select, Col, Button, Row, message, DatePicker, Tooltip } from 'antd';
-import { QuestionCircleFilled, PlusCircleOutlined } from '@ant-design/icons';
-import moment from 'moment';
-
-import TagItem from './tagItem';
-import { addShield } from '@/services/shield';
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Form, Input, Card, Select, Col, Button, Row, message, DatePicker, Tooltip, Spin, Space } from 'antd';
+import { QuestionCircleFilled, PlusCircleOutlined, CaretDownOutlined } from '@ant-design/icons';
 import { useHistory } from 'react-router';
-import { shieldItem } from '@/store/warningInterface';
 import { useSelector } from 'react-redux';
-import { RootState } from '@/store/common';
-import { CommonStoreState } from '@/store/commonInterface';
-import '../index.less';
 import { useTranslation } from 'react-i18next';
 import _ from 'lodash';
+import moment from 'moment';
+import { addShield, editShield } from '@/services/shield';
+import { getBusiGroups } from '@/services/common';
+import { shieldItem } from '@/store/warningInterface';
+import { RootState } from '@/store/common';
+import { CommonStoreState } from '@/store/commonInterface';
+import AdvancedWrap from '@/components/AdvancedWrap';
+import TagItem from './tagItem';
 import { timeLensDefault } from '../../const';
+import CateSelect from './CateSelect';
+import ClusterSelect from './ClusterSelect';
+import '../index.less';
 
 const { Option } = Select;
 const { TextArea } = Input;
 
 interface ItagsObj {
   tags: any[];
+  cluster: string;
 }
 interface Props {
   detail?: shieldItem;
   tagsObj?: ItagsObj;
-  type?: number; // 1:创建; 2:克隆
+  type?: number; // 1:创建; 2:克隆 3:编辑
 }
 
-const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }) => {
+const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }: any) => {
   const btimeDefault = new Date().getTime();
   const etimeDefault = new Date().getTime() + 1 * 60 * 60 * 1000; // 默认时长1h
-  const { t, i18n } = useTranslation();
-  const { clusters: clusterList } = useSelector<RootState, CommonStoreState>((state) => state.common);
+  const { t } = useTranslation();
   const layout = {
     labelCol: {
       span: 24,
@@ -48,12 +67,17 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }) => {
       span: 24,
     },
   };
-
   const [form] = Form.useForm(null as any);
   const history = useHistory();
-  const [btnLoading, setBtnLoading] = useState<boolean>(false);
   const [timeLen, setTimeLen] = useState('1h');
-  const { curBusiItem } = useSelector<RootState, CommonStoreState>((state) => state.common);
+  const { curBusiItem, busiGroups } = useSelector<RootState, CommonStoreState>((state) => state.common);
+  const [filteredBusiGroups, setFilteredBusiGroups] = useState(busiGroups);
+
+  useEffect(() => {
+    if (!filteredBusiGroups.length) {
+      setFilteredBusiGroups(busiGroups);
+    }
+  }, [JSON.stringify(busiGroups)]);
 
   useEffect(() => {
     const btime = form.getFieldValue('btime');
@@ -63,6 +87,14 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }) => {
       const h = moment.duration(etime - btime).hours();
       const m = moment.duration(etime - btime).minutes();
       const s = moment.duration(etime - btime).seconds();
+    }
+    if (curBusiItem) {
+      form.setFieldsValue({ busiGroup: curBusiItem.id });
+    } else if (filteredBusiGroups.length > 0) {
+      form.setFieldsValue({ busiGroup: filteredBusiGroups[0].id });
+    } else {
+      message.warning('无可用业务组');
+      history.push('/alert-mutes');
     }
     return () => {};
   }, [form]);
@@ -78,25 +110,41 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }) => {
       });
       form.setFieldsValue({
         tags: tags || [{}],
+        cluster: [tagsObj.cluster],
+        busiGroup: tagsObj.group_id,
+      });
+    }
+    if (tagsObj?.cate) {
+      form.setFieldsValue({
+        cate: tagsObj?.cate,
       });
     }
   }, [tagsObj]);
+
+  useEffect(() => {
+    timeChange();
+  }, [detail]);
 
   const timeChange = () => {
     const btime = form.getFieldValue('btime');
     const etime = form.getFieldValue('etime');
     if (!!etime && !!btime) {
+      const y = Math.round(moment.duration(etime - btime).asYears());
       const d = Math.floor(moment.duration(etime - btime).asDays());
       const h = Math.floor(moment.duration(etime - btime).hours());
       const m = Math.floor(moment.duration(etime - btime).minutes());
       const s = Math.floor(moment.duration(etime - btime).seconds());
-      const timeLen = `${d ? `${d}d ` : ''}${h ? `${h}h ` : ''}${m ? `${m}m ` : ''}${s ? `${s}s` : ''}`;
-      setTimeLen(timeLen);
+      if (y > 0) {
+        const timeLen = `${y ? `${y}y ` : ''}`;
+        setTimeLen(timeLen);
+      } else {
+        const timeLen = `${d ? `${d}d ` : ''}${h ? `${h}h ` : ''}${m ? `${m}m ` : ''}${s ? `${s}s` : ''}`;
+        setTimeLen(timeLen);
+      }
     }
   };
 
   const onFinish = (values) => {
-    setBtnLoading(true);
     const tags = values?.tags?.map((item) => {
       return {
         ...item,
@@ -105,37 +153,27 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }) => {
     });
     const params = {
       ...values,
+      cluster: values.cluster.join(' '),
       btime: moment(values.btime).unix(),
       etime: moment(values.etime).unix(),
       tags,
     };
-    addShield(params, curBusiItem.id)
-      .then((_) => {
+    const curBusiItemId = form.getFieldValue('busiGroup');
+    if (type == 1) {
+      editShield(params, curBusiItemId, detail.id).then((_) => {
+        message.success(t('编辑告警屏蔽成功'));
+        history.push('/alert-mutes');
+      });
+    } else {
+      addShield(params, curBusiItemId).then((_) => {
         message.success(t('新建告警屏蔽成功'));
         history.push('/alert-mutes');
-      })
-      .finally(() => {
-        setBtnLoading(false);
       });
+    }
   };
-  const onFinishFailed = () => {
-    setBtnLoading(false);
-  };
-
   const timeLenChange = (val: string) => {
     setTimeLen(val);
-
     const time = new Date().getTime();
-    if (val === 'forever') {
-      const longTime = 7 * 24 * 3600 * 1000 * 10000;
-      form.setFieldsValue({
-        btime: moment(time),
-        etime: moment(time).add({
-          seconds: longTime,
-        }),
-      });
-      return;
-    }
     const unit = val.charAt(val.length - 1);
     const num = val.substr(0, val.length - 1);
     form.setFieldsValue({
@@ -146,6 +184,29 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }) => {
     });
   };
 
+  const [fetching, setFetching] = useState(false);
+  const fetchRef = useRef(0);
+  const debounceFetcher = useMemo(() => {
+    const loadOptions = (value: string) => {
+      fetchRef.current += 1;
+      const fetchId = fetchRef.current;
+      setFilteredBusiGroups([]);
+      setFetching(true);
+
+      getBusiGroups(value).then((res) => {
+        if (fetchId !== fetchRef.current) {
+          // for fetch callback order
+          return;
+        }
+
+        setFilteredBusiGroups(res.dat || []);
+        setFetching(false);
+      });
+    };
+
+    return _.debounce(loadOptions, 500);
+  }, []);
+
   const content = (
     <Form
       form={form}
@@ -153,32 +214,46 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }) => {
       layout='vertical'
       className='operate-form'
       onFinish={onFinish}
-      onFinishFailed={onFinishFailed}
       initialValues={{
         ...detail,
         btime: detail?.btime ? moment(detail.btime * 1000) : moment(btimeDefault),
         etime: detail?.etime ? moment(detail.etime * 1000) : moment(etimeDefault),
-        cluster: clusterList[0] || 'Default',
+        cluster: detail.cluster ? detail.cluster.split(' ') : ['$all'], // 生效集群
       }}
     >
       <Card>
         <Form.Item
-          label={t('生效集群：')}
-          name='cluster'
+          label={t('规则备注：')}
+          name='note'
           rules={[
             {
               required: true,
-              message: t('生效集群不能为空'),
+              message: t('规则备注不能为空'),
             },
           ]}
         >
-          <Select>
-            {clusterList?.map((item) => (
-              <Option value={item} key={item}>
-                {item}
+          <Input placeholder={t('请输入规则备注')} />
+        </Form.Item>
+
+        <Form.Item label={t('业务组：')} name='busiGroup'>
+          <Select showSearch filterOption={false} suffixIcon={<CaretDownOutlined />} onSearch={debounceFetcher} notFoundContent={fetching ? <Spin size='small' /> : null}>
+            {_.map(filteredBusiGroups, (item) => (
+              <Option value={item.id} key={item.id}>
+                {item.name}
               </Option>
             ))}
           </Select>
+        </Form.Item>
+
+        <AdvancedWrap var='VITE_IS_ALERT_ES_DS'>
+          {(visible) => {
+            return <CateSelect form={form} visible={visible} />;
+          }}
+        </AdvancedWrap>
+        <Form.Item shouldUpdate={(prevValues, curValues) => prevValues.cate !== curValues.cate} noStyle>
+          {({ getFieldValue }) => {
+            return <ClusterSelect form={form} cate={getFieldValue('cate')} />;
+          }}
         </Form.Item>
 
         <Row gutter={10}>
@@ -189,7 +264,7 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }) => {
           </Col>
           <Col span={8}>
             <Form.Item label={t('屏蔽时长：')}>
-              <Select placeholder={t('请选择屏蔽时长')} onChange={timeLenChange} value={timeLen}>
+              <Select suffixIcon={<CaretDownOutlined />} placeholder={t('请选择屏蔽时长')} onChange={timeLenChange} value={timeLen}>
                 {timeLensDefault.map((item: any, index: number) => (
                   <Option key={index} value={item.value}>
                     {item.value}
@@ -226,10 +301,6 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }) => {
             </>
           )}
         </Form.List>
-
-        {/* <Form.Item label={t('屏蔽时间')} name='time'>
-          <RangeDatePicker />
-        </Form.Item> */}
         <Form.Item
           label={t('屏蔽原因')}
           name='cause'
@@ -243,22 +314,12 @@ const OperateForm: React.FC<Props> = ({ detail = {}, type, tagsObj = {} }) => {
           <TextArea rows={3} />
         </Form.Item>
         <Form.Item {...tailLayout}>
-          <Row gutter={[10, 10]}>
-            <Col span={1}>
-              <Button type='primary' htmlType='submit'>
-                {type === 2 ? t('克隆') : t('创建')}
-              </Button>
-            </Col>
-
-            <Col
-              span={1}
-              style={{
-                marginLeft: 40,
-              }}
-            >
-              <Button onClick={() => window.history.back()}>{t('取消')}</Button>
-            </Col>
-          </Row>
+          <Space>
+            <Button type='primary' htmlType='submit'>
+              {type === 1 ? t('编辑') : type === 2 ? t('克隆') : t('创建')}
+            </Button>
+            <Button onClick={() => window.history.back()}>{t('取消')}</Button>
+          </Space>
         </Form.Item>
       </Card>
     </Form>

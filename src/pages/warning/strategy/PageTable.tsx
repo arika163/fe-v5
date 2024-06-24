@@ -1,13 +1,29 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import React, { useEffect, useState, useMemo } from 'react';
+import _ from 'lodash';
 import { useSelector } from 'react-redux';
-import { Tag, Button, Select, Modal, message, Switch, Dropdown, Table } from 'antd';
+import { Tag, Button, Modal, message, Switch, Dropdown, Table, Tabs, Select, Space } from 'antd';
 import { getStrategyGroupSubList, updateAlertRules } from '@/services/warning';
 import SearchInput from '@/components/BaseSearchInput';
-import { useHistory } from 'react-router-dom';
-
+import { useHistory, Link } from 'react-router-dom';
 import { strategyItem, strategyStatus } from '@/store/warningInterface';
 import { CommonStoreState } from '@/store/commonInterface';
-import { addOrEditStrategy, deleteStrategy } from '@/services/warning';
+import { addOrEditStrategy, deleteStrategy, getBuiltinAlerts, createBuiltinAlerts } from '@/services/warning';
 import { priorityColor } from '@/utils/constant';
 import { ColumnType } from 'antd/lib/table';
 import { pageSizeOptionsDefault } from '../const';
@@ -18,8 +34,10 @@ import ColorTag from '@/components/ColorTag';
 import { DownOutlined } from '@ant-design/icons';
 import ImportAndDownloadModal, { ModalStatus } from '@/components/ImportAndDownloadModal';
 import EditModal from './components/editModal';
-const { Option } = Select;
+import ColumnSelect from '@/components/ColumnSelect';
+import AdvancedWrap from '@/components/AdvancedWrap';
 const { confirm } = Modal;
+const { TabPane } = Tabs;
 
 import { useTranslation } from 'react-i18next';
 const exportIgnoreAttrsObj = {
@@ -36,12 +54,12 @@ const exportIgnoreAttrsObj = {
 };
 interface Props {
   bgid?: number;
-  severity: number | undefined;
-  clusters?: string[];
 }
 
-const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
-  const { t, i18n } = useTranslation();
+const PageTable: React.FC<Props> = ({ bgid }) => {
+  const [severity, setSeverity] = useState<number>();
+  const [clusters, setClusters] = useState<string[]>([]);
+  const { t } = useTranslation();
   const history = useHistory();
   const [modalType, setModalType] = useState<ModalStatus>(ModalStatus.None);
   const [selectRowKeys, setSelectRowKeys] = useState<React.Key[]>([]);
@@ -55,6 +73,7 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
   const [currentStrategyDataAll, setCurrentStrategyDataAll] = useState([]);
   const [currentStrategyData, setCurrentStrategyData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [cate, setCate] = useState<string>();
 
   useEffect(() => {
     if (bgid) {
@@ -73,7 +92,11 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
     setLoading(true);
     const { success, dat } = await getStrategyGroupSubList({ id: bgid });
     if (success) {
-      setCurrentStrategyDataAll(dat.filter((item) => !severity || item.severity === severity) || []);
+      setCurrentStrategyDataAll(
+        dat.filter((item) => {
+          return !severity || item.severity === severity;
+        }) || [],
+      );
       setLoading(false);
     }
   };
@@ -81,17 +104,17 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
   const filterData = () => {
     const data = JSON.parse(JSON.stringify(currentStrategyDataAll));
     const res = data.filter((item) => {
-      return (item.name.indexOf(query) > -1 || item.append_tags.join(' ').indexOf(query) > -1) && ((clusters && clusters?.indexOf(item.cluster) > -1) || clusters?.length === 0);
+      const lowerCaseQuery = query.toLowerCase();
+      return (
+        (item.name.toLowerCase().indexOf(lowerCaseQuery) > -1 || item.append_tags.join(' ').toLowerCase().indexOf(lowerCaseQuery) > -1) &&
+        ((clusters && clusters?.indexOf(item.cluster) > -1) || clusters?.length === 0)
+      );
     });
     setCurrentStrategyData(res || []);
   };
 
   const goToAddWarningStrategy = () => {
     curBusiItem?.id && history.push(`/alert-rules/add/${curBusiItem.id}`);
-  };
-
-  const handleClickEdit = (id, isClone = false) => {
-    curBusiItem?.id && history.push(`/alert-rules/edit/${id}${isClone ? '?mode=clone' : ''}`);
   };
 
   const refreshList = () => {
@@ -103,7 +126,13 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
       title: t('集群'),
       dataIndex: 'cluster',
       render: (data) => {
-        return <div>{data}</div>;
+        const array = data.split(' ') || [];
+        return (
+          (array.length &&
+            array.map((tag: string, index: number) => {
+              return <ColorTag text={tag} key={index}></ColorTag>;
+            })) || <div></div>
+        );
       },
     },
     {
@@ -118,14 +147,14 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
       dataIndex: 'name',
       render: (data, record) => {
         return (
-          <div
+          <Link
             className='table-active-text'
-            onClick={() => {
-              handleClickEdit(record.id);
+            to={{
+              pathname: `/alert-rules/edit/${record.id}`,
             }}
           >
             {data}
-          </div>
+          </Link>
         );
       },
     },
@@ -196,18 +225,20 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
     {
       title: t('操作'),
       dataIndex: 'operator',
-      width: 100,
-      render: (data, record) => {
+      width: 160,
+      render: (data, record: any) => {
         return (
           <div className='table-operator-area'>
-            <div
+            <Link
               className='table-operator-area-normal'
-              onClick={() => {
-                handleClickEdit(record.id, true);
+              style={{ marginRight: 8 }}
+              to={{
+                pathname: `/alert-rules/edit/${record.id}?mode=clone`,
               }}
+              target='_blank'
             >
               {t('克隆')}
-            </div>
+            </Link>
             <div
               className='table-operator-area-warning'
               onClick={() => {
@@ -226,6 +257,11 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
             >
               {t('删除')}
             </div>
+            {record.algorithm === 'holtwinters' && (
+              <div>
+                <Link to={{ pathname: `/alert-rules/brain/${record.id}` }}>训练结果</Link>
+              </div>
+            )}
           </div>
         );
       },
@@ -252,7 +288,7 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
   const menu = useMemo(() => {
     return (
       <ul className='ant-dropdown-menu'>
-        <li className='ant-dropdown-menu-item' onClick={() => setModalType(ModalStatus.Import)}>
+        <li className='ant-dropdown-menu-item' onClick={() => setModalType(ModalStatus.BuiltIn)}>
           <span>{t('导入告警规则')}</span>
         </li>
         <li
@@ -312,10 +348,13 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
 
   const editModalFinish = async (isOk, fieldsData?) => {
     if (isOk) {
+      const action = fieldsData.action;
+      delete fieldsData.action;
       const res = await updateAlertRules(
         {
           ids: selectRowKeys,
           fields: fieldsData,
+          action,
         },
         curBusiItem.id,
       );
@@ -334,17 +373,32 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
   return (
     <div className='strategy-table-content'>
       <div className='strategy-table-search table-handle'>
-        <div className='strategy-table-search-left'>
+        <Space>
           <RefreshIcon
-            className='strategy-table-search-left-refresh'
             onClick={() => {
               refreshList();
             }}
           />
+          <AdvancedWrap var='VITE_IS_ALERT_ES_DS'>
+            <Select
+              value={cate}
+              onChange={(val) => {
+                setCate(val);
+              }}
+              style={{ width: 120 }}
+              placeholder='数据源类型'
+              allowClear
+            >
+              <Select.Option value='prometheus'>Prometheus</Select.Option>
+              <Select.Option value='elasticsearch'>Elasticsearch</Select.Option>
+              <Select.Option value='aliyun-sls'>阿里云 SLS</Select.Option>
+            </Select>
+          </AdvancedWrap>
+          <ColumnSelect noLeftPadding noRightPadding onSeverityChange={(e) => setSeverity(e)} onClusterChange={(e) => setClusters(e)} />
           <SearchInput className={'searchInput'} placeholder={t('搜索名称或标签')} onSearch={setQuery} allowClear />
-        </div>
+        </Space>
         <div className='strategy-table-search-right'>
-          <Button type='primary' onClick={goToAddWarningStrategy} className='strategy-table-search-right-create'>
+          <Button type='primary' onClick={goToAddWarningStrategy} className='strategy-table-search-right-create' ghost>
             {t('新增告警规则')}
           </Button>
           <div className={'table-more-options'}>
@@ -376,7 +430,13 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
           defaultPageSize: 30,
         }}
         loading={loading}
-        dataSource={currentStrategyData}
+        dataSource={_.filter(currentStrategyData, (item) => {
+          const curItemCate = item.cate || 'prometheus';
+          if (cate) {
+            return curItemCate === cate;
+          }
+          return true;
+        })}
         rowSelection={{
           selectedRowKeys: selectedRows.map((item) => item.id),
           onChange: (selectedRowKeys: React.Key[], selectedRows: strategyItem[]) => {
@@ -387,7 +447,10 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
         columns={columns}
       />
       <ImportAndDownloadModal
+        bgid={bgid}
         status={modalType}
+        fetchBuiltinFunc={getBuiltinAlerts}
+        submitBuiltinFunc={createBuiltinAlerts}
         onClose={() => {
           setModalType(ModalStatus.None);
         }}
@@ -395,7 +458,17 @@ const PageTable: React.FC<Props> = ({ bgid, clusters, severity }) => {
           getAlertRules();
         }}
         onSubmit={handleImportStrategy}
-        title={t('告警规则')}
+        label='告警规则'
+        title={
+          ModalStatus.Export === modalType ? (
+            '告警规则'
+          ) : (
+            <Tabs defaultActiveKey={ModalStatus.BuiltIn} onChange={(e: ModalStatus) => setModalType(e)} className='custom-import-alert-title'>
+              <TabPane tab=' 导入内置告警规则' key={ModalStatus.BuiltIn}></TabPane>
+              <TabPane tab='导入告警规则JSON' key={ModalStatus.Import}></TabPane>
+            </Tabs>
+          )
+        }
         exportData={exportData}
       />
       {isModalVisible && <EditModal isModalVisible={isModalVisible} editModalFinish={editModalFinish} />}

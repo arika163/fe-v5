@@ -1,7 +1,24 @@
+/*
+ * Copyright 2022 Nightingale Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 import { message } from 'antd';
 import React, { ReactNode, Component } from 'react';
 import { IStore } from '@/store/common';
 import { useLocation } from 'react-router-dom';
+
 export const isPromise = (obj) => {
   return !!obj && (typeof obj === 'object' || typeof obj === 'function') && typeof obj.then === 'function';
 };
@@ -14,21 +31,6 @@ export const download = function (stringList: Array<string> | string, name: stri
   document.body.appendChild(element);
   element.click();
 };
-
-// export const copyToClipBoard = (text: string) => {
-//   const input = document.createElement('input');
-//   document.body.appendChild(input);
-//   input.setAttribute('value', text);
-//   input.select();
-//   try {
-//     if (document.execCommand('Copy')) {
-//       message.success('复制到剪贴板');
-//     }
-//   } catch (error) {
-//     message.error('复制失败');
-//   }
-//   document.body.removeChild(input);
-// };
 
 /**
  * 将文本添加到剪贴板
@@ -57,6 +59,34 @@ export const copyToClipBoard = (text: string, t, spliter?: string): boolean => {
     }
   } catch (err) {
     message.error(t('复制失败'));
+    succeeded = false;
+  }
+  if (succeeded) {
+    document.body.removeChild(fakeElem);
+  }
+  return succeeded;
+};
+
+export const copy2ClipBoard = (text: string, silent = false): boolean => {
+  const fakeElem = document.createElement('textarea');
+  fakeElem.style.border = '0';
+  fakeElem.style.padding = '0';
+  fakeElem.style.margin = '0';
+  fakeElem.style.position = 'absolute';
+  fakeElem.style.left = '-9999px';
+  const yPosition = window.pageYOffset || document.documentElement.scrollTop;
+  fakeElem.style.top = `${yPosition}px`;
+  fakeElem.setAttribute('readonly', '');
+  fakeElem.value = text;
+
+  document.body.appendChild(fakeElem);
+  fakeElem.select();
+  let succeeded;
+  try {
+    succeeded = document.execCommand('copy');
+    !silent && message.success('复制到剪贴板');
+  } catch (err) {
+    message.error('复制失败');
     succeeded = false;
   }
   if (succeeded) {
@@ -109,18 +139,21 @@ export const generateID = (): string => {
   return `_${Math.random().toString(36).substr(2, 9)}`;
 };
 
+export interface SizeFormatterOptions {
+  withUnit?: boolean;
+  withByte?: boolean;
+  trimZero?: boolean;
+  convertNum?: number
+}
+
 // https://github.com/n9e/fe-v5/issues/72 修改 withByte 默认为 false
 export const sizeFormatter = (
   val,
   fixedCount = 2,
-  { withUnit = true, withByte = false, trimZero = false, convertNum = 1024 } = {
-    withUnit: true,
-    withByte: false,
-    trimZero: false,
-    convertNum: 1024 | 1000,
-  },
+  options?: SizeFormatterOptions,
 ) => {
   const size = val ? Number(val) : 0;
+  const { withUnit = true, withByte = false, trimZero = false, convertNum = 1024 } = options || {}
   let result;
   let unit = '';
 
